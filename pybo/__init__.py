@@ -23,7 +23,9 @@ def create_app():
     migrate.init_app(app, db)
 
     # 블루프린트
-    from .views import main_views
+    # 2025-07-25, question_views.py 파일에 등록한 블루프린트 적용을 위한 임포트 (app.register_blueprint() 메서드 사용)
+    from .views import main_views, question_views
     app.register_blueprint(main_views.bp)
+    app.register_blueprint(question_views.bp)
 
     return app

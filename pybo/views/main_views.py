@@ -17,3 +17,9 @@ def index():
     # 게시판 질문 목록이 출력되도록 변경
     question_list = Question.query.order_by(Question.create_date.desc())
     return render_template('question/question_list.html', question_list=question_list)
+
+# 2025-07-25, 라우팅 함수 추가
+@bp.route('/detail/<int:question_id>/')
+def detail(question_id):
+    question = Question.query.get_or_404(question_id)
+    return render_template('question/question_detail.html', question=question)
