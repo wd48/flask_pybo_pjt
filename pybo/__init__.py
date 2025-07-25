@@ -12,6 +12,7 @@ db, migrate 객체를 모듈 레벨에서 생성하고 (create_app 함수 밖), 
 
 db = SQLAlchemy()
 migrate = Migrate()
+from . import models  # 모델을 임포트하여 SQLAlchemy가 모델 클래스를 인식하도록 함
 
 def create_app():
     app = Flask(__name__)
