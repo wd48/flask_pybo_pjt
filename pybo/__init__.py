@@ -24,8 +24,10 @@ def create_app():
 
     # 블루프린트
     # 2025-07-25, question_views.py 파일에 등록한 블루프린트 적용을 위한 임포트 (app.register_blueprint() 메서드 사용)
-    from .views import main_views, question_views
+    # 2025-07-25, answer_views.py 파일에 등록한 블루프린트 적용을 위한 임포트
+    from .views import main_views, question_views, answer_views
     app.register_blueprint(main_views.bp)
     app.register_blueprint(question_views.bp)
+    app.register_blueprint(answer_views.bp)
 
     return app
