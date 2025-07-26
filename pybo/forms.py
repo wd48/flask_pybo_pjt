@@ -18,3 +18,8 @@ class UserCreateForm(FlaskForm):
         DataRequired(), EqualTo('password2', '비밀번호가 일치하지 않습니다')])
     password2 = PasswordField('비밀번호확인', validators=[DataRequired()])
     email = EmailField('이메일', validators=[DataRequired(), Email()])
+
+# 2025-07-26, 사용자 로그인 폼을 위한 FlaskForm 클래스 정의
+class UserLoginForm(FlaskForm):
+    username = StringField('사용자이름', validators=[DataRequired(), Length(min=3, max=25)])
+    password = PasswordField('비밀번호', validators=[DataRequired()])
