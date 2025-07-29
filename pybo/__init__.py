@@ -35,4 +35,8 @@ def create_app():
     from .filter import format_datetime
     app.jinja_env.filters['datetime'] = format_datetime
 
+    # 2025-07-29, RAG 챗봇 기능을 위한 블루프린트 등록
+    from .rag_chat import bp as rag_chat_bp
+    app.register_blueprint(rag_chat_bp)
+
     return app
