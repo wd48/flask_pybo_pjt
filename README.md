@@ -1,11 +1,12 @@
 # 기술 스택 (ing)
 - flask
 - python 3.13.5
-## 추가예정
 - LangChain
+- embedding : jhgan/ko-sroberta-multitask
+- LLM : google/gemma-2b-it
+## 추가예정
 - models
-  - embedding : jhgan/ko-sroberta-multitask
-  - LLM : google/gemma-3n-it
+  - LLM : google/gemma-3n-E2B-it [huggingFace](https://huggingface.co/google/gemma-3n-E2B-it)
 
 # reference
 - https://wikidocs.net/81044
@@ -22,6 +23,9 @@ $ python -m pip install --upgrade pip
 # ORM 라이브러리 설치
 pip install flask-migrate
 
+# .env 설정파일 생성 필요
+HUGGINGFACEHUB_API_TOKEN=hugging face 사용자 토큰
+DATA_FILE_PATH=pybo/resources/models
 
 # 1. 가상환경 활성화 및 패키지 설치: venv2 가상환경을 활성화합니다.
   # Windows
