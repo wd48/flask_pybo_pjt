@@ -121,8 +121,6 @@ $ flask shell
 │   └── models/
 │       ├── gemma-3n-E2B-it/
 │       └── ko-sroberta/
-├── shell/
-│   └── kindlab_pjt.cmd
 ├── vector_store/
 │   └── chroma.sqlite3
 ├── venv2/
