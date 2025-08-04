@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
-from langchain_community.llms import HuggingFacePipeline
+from langchain_community.llms import Ollama
 from langchain.chains import RetrievalQA
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
 
@@ -47,9 +47,6 @@ pipe = pipeline(
     top_p=0.95
 )
 
-llm = HuggingFacePipeline(pipeline=pipe)
-
-# 4. RAG 체인
 from langchain.prompts import PromptTemplate
 
 custom_prompt = PromptTemplate(
@@ -62,6 +59,10 @@ custom_prompt = PromptTemplate(
     """
 )
 
+# 2025-08-04 ollama로 변경
+llm = Ollama(model="gemma2:latest")
+
+# 4. RAG 체인
 qa_chain = RetrievalQA.from_chain_type(
     llm=llm,
     retriever=vectordb.as_retriever(),
