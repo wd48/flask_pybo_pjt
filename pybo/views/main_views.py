@@ -25,9 +25,6 @@ def index():
     # url_for : 라우팅 함수명으로 URL을 역으로 찾는 함수
     return redirect(url_for('question._list'))
 
-'''
-'''
-
 # 2025-07-25, 라우팅 함수 추가
 # question_views.py 파일에 질문 목록, 질문 상세 기능을 구현했으므로
 # main_views.py 파일에서는 해당 기능 제거
