@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from flask import Blueprint, render_template, request, url_for, g
+from flask import Blueprint, render_template, request, url_for, g, flash
 from werkzeug.utils import redirect
 
 from .. import db
@@ -46,3 +46,37 @@ def create():
         return redirect(url_for('main.index')) # 질문 목록 페이지로 리다이렉트
     return render_template('question/question_form.html', form=form)
 
+# 2025-08-05, 질문 수정 기능 구현
+# - 질문 수정은 질문 작성자만 가능하도록 구현
+# - 질문 작성자가 아닌 사용자가 수정하려고 하면 '수정 권한이 없습니다.' 메시지를 출력하고 질문 상세 페이지로 리다이렉트
+# - 질문 작성자가 수정하려고 하면 질문 폼에 기존 질문 데이터를 채워 넣어 수정할 수 있도록 함
+@bp.route('/modify/<int:question_id>/', methods=['GET', 'POST'])
+@login_required
+def modify(question_id):
+    question = Question.query.get_or_404(question_id)
+    if g.user != question.user:
+        flash('수정 권한이 없습니다.')
+        return redirect(url_for('question.detail', question_id=question_id))
+    if request.method == 'POST': # POST 요청인 경우
+        form = QuestionForm()
+        if form.validate_on_submit():
+            form.populate_obj(question)
+            question.modify_date = datetime.now()
+            db.session.commit()
+            return redirect(url_for('question.detail', question_id=question_id))
+    else:   # GET 요청인 경우
+        form = QuestionForm(obj=question) # 기존 질문 데이터를 폼에 채워 넣음
+    return render_template('question/question_form.html', form=form)
+
+# 2025-08-05, 질문 삭제 기능 구현
+@bp.route('/delete/<int:question_id>')
+@login_required
+def delete(question_id):
+    question = Question.query.get_or_404(question_id)
+
+    if g.user != question.user:
+        flash('삭제 권한이 없습니다.')
+        return redirect(url_for('question.detail', question_id=question_id))
+    db.session.delete(question)
+    db.session.commit()
+    return redirect(url_for('question._list'))  # 질문 목록 페이지로 리다이렉트
