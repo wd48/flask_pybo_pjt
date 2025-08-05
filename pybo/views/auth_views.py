@@ -1,6 +1,7 @@
 from flask import Blueprint, url_for, render_template, flash, request, session, g
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import redirect
+import functools
 
 from pybo import db
 from pybo.forms import UserCreateForm, UserLoginForm
@@ -44,7 +45,12 @@ def login():
         if error is None:
             session.clear()
             session['user_id'] = user.id
-            return redirect(url_for('main.index'))
+            # 2025-08-05, 로그인 성공 후 리다이렉트할 URL을 처리
+            _next = request.args.get('next','')
+            if _next:
+                return redirect(_next)
+            else:
+                return redirect(url_for('main.index'))
         flash(error)
     return render_template('auth/login.html', form=form)
 
@@ -63,3 +69,14 @@ def load_logged_in_user():
 def logout():
     session.clear()
     return redirect(url_for('main.index'))
+
+# 2025-08-05
+# g.user가 있는지 조사하여 없으면 로그인 URL로 리다이렉트하는 데코레이터 함수
+def login_required(view):
+    @functools.wraps(view)
+    def wrapped_view(*arg, **kwargs):
+        if g.user is None:
+            _next = request.url if request.method == 'GET' else ''
+            return redirect(url_for('auth.login', next=_next))
+        return view(*arg, **kwargs)
+    return wrapped_view

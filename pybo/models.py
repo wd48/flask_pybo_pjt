@@ -11,6 +11,8 @@ class Question(db.Model):
     subject = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text(), nullable=False)
     create_date = db.Column(db.DateTime(), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    user = db.relationship('User', backref=db.backref('question_set'))
 
 # 답변 모델 생성
 '''
@@ -26,8 +28,6 @@ question : 답변이 속한 질문을 참조하는 관계 설정
 
 - backref 
 : Question 모델에서 answer_set 속성을 통해 해당 질문에 속한 답변들을 조회할 수 있도록 설정
-
-
 '''
 class Answer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -35,6 +35,8 @@ class Answer(db.Model):
     question = db.relationship('Question', backref=db.backref('answer_set'))
     content = db.Column(db.Text(), nullable=False)
     create_date = db.Column(db.DateTime(), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    user = db.relationship('User', backref=db.backref('answer_set'))
 
 # 회원가입
 class User(db.Model):
