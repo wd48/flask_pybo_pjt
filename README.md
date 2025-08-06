@@ -9,7 +9,8 @@
   - LLM : google/gemma-3n-E2B-it [huggingFace](https://huggingface.co/google/gemma-3n-E2B-it)
 
 # reference
-- https://wikidocs.net/81044
+- [flask](https://wikidocs.net/81044)
+- [LangChain](https://wikidocs.net/233351)
 ---
 ### 실행방법
 ```bash
