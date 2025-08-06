@@ -1,20 +1,42 @@
 # pybo/rag_chat/rag_pipeline.py
 import os
 from dotenv import load_dotenv
-
+from langchain_community.document_loaders import TextLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_chroma import Chroma
 from langchain_community.llms import Ollama
+from langchain_chroma import Chroma
 from langchain.chains import RetrievalQA
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
 
 load_dotenv()
 model_path = os.getenv("DATA_FILE_PATH")
+
 # 1. 임베딩 모델
 embedding_model = HuggingFaceEmbeddings(
     model_name="jhgan/ko-sroberta-multitask",
     cache_folder=model_path
 )
+
+# 2025-08-06 문서 로딩 및 분할
+def load_and_split_documents(file_path: str):
+    loader = TextLoader(file_path, encoding="utf-8")
+    docs = loader.load()
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500,
+        chunk_overlap=100
+    )
+    return splitter.split_documents(docs)
+
+# 2025-08-06 Chroma 벡터 저장소 초기화
+def initialize_chroma(docs, persist_dir="./chroma_db"):
+    vectordb = Chroma.from_documents(
+        documents=docs,
+        embedding=embedding_model,
+        persist_directory=persist_dir
+    )
+    vectordb.persist()
+    return vectordb
 
 # 2. Chroma 벡터 DB 로드 또는 생성
 CHROMA_PATH = "./chroma_db"
@@ -27,25 +49,8 @@ vectordb = Chroma(
     persist_directory=CHROMA_PATH
 )
 
-# 3. LLM - Gemma 2b
-load_dotenv()
-token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = token
-
-model_id = "google/gemma-2b-it"
-tokenizer = AutoTokenizer.from_pretrained(model_id, token=token)
-model = AutoModelForCausalLM.from_pretrained(model_id, token=token)
-
-pipe = pipeline(
-    "text-generation",
-    model=model,
-    tokenizer=tokenizer,
-    max_new_tokens=512,
-    do_sample=True,
-    temperature=0.7,
-    top_k=50,
-    top_p=0.95
-)
+# HuggingFace 관련 코드 제거
+# Ollama를 사용하므로 HuggingFace 설정은 필요하지 않음
 
 from langchain.prompts import PromptTemplate
 
@@ -59,10 +64,10 @@ custom_prompt = PromptTemplate(
     """
 )
 
-# 2025-08-04 ollama로 변경
-llm = Ollama(model="gemma2:latest")
+# Ollama 모델 사용
+llm = Ollama(model="gemma3n:latest")
 
-# 4. RAG 체인
+# RAG 체인 생성
 qa_chain = RetrievalQA.from_chain_type(
     llm=llm,
     retriever=vectordb.as_retriever(),
@@ -70,7 +75,7 @@ qa_chain = RetrievalQA.from_chain_type(
     chain_type_kwargs={"prompt": custom_prompt}
 )
 
-# 5. 질의 함수
+# 질의 함수
 def ask_rag(query: str):
     result = qa_chain.invoke(query)
     if isinstance(result, dict) and 'result' in result:
