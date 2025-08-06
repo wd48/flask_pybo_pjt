@@ -1,7 +1,7 @@
 # pybo/rag_chat/routes.py
 from flask import Blueprint, render_template, request, url_for, redirect, flash
-from .rag_pipeline import ask_rag
-from .upload_utils import save_and_embed_pdf
+from .rag_pipeline import ask_rag, run_llm_chain
+from .upload_utils import save_and_embed_pdf, list_uploaded_pdfs, query_by_pdf
 
 bp = Blueprint("rag_chat", __name__, url_prefix="/chat")
 
@@ -38,3 +38,23 @@ def upload_pdf():
             return redirect(request.url)
 
     return render_template("rag_chat/upload.html")
+
+# 2025-08-07 PDF 파일 목록 라우트
+@bp.route("/files", methods=['GET'])
+def file_list():
+    files = list_uploaded_pdfs()
+    return render_template("rag_chat/file_list.html", files=files)
+
+# 2025-08-07 PDF 파일 검색 라우트
+@bp.route('/search_by_file', methods=['POST','GET'])
+def search_by_file():
+    filename = request.form.get('filename')
+    query = request.form.get('query')
+
+    if not filename or not query:
+        flash("파일과 질문을 모두 입력하세요.")
+        return redirect(url_for('rag_chat.file_list'))
+
+    retriever = query_by_pdf(filename, query)
+    answer = run_llm_chain(query, retriever)
+    return render_template('rag_chat/file_list.html', files=list_uploaded_pdfs(), answer=answer, selected_file=filename)

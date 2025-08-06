@@ -1,0 +1,29 @@
+<!-- templates/rag_chat/files.html -->
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2>📂 업로드된 문서 목록</h2>
+  <form method="post" action="{{ url_for('rag_chat.search_by_file') }}">
+    <div class="mb-3">
+      <label for="filename" class="form-label">PDF 선택</label>
+      <select name="filename" class="form-select" required>
+        <option value="">-- 문서를 선택하세요 --</option>
+        {% for file in files %}
+          <option value="{{ file }}" {% if file == selected_file %}selected{% endif %}>{{ file }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label for="query" class="form-label">질문 입력</label>
+      <input type="text" class="form-control" name="query" required>
+    </div>
+    <button type="submit" class="btn btn-primary">검색</button>
+  </form>
+
+  {% if answer %}
+    <div class="mt-4 alert alert-success">
+      <strong>💡 답변:</strong> {{ answer }}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

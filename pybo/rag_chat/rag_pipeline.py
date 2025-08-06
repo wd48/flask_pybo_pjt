@@ -84,3 +84,10 @@ def ask_rag(query: str):
             return answer_text.split('Answer:')[1].strip()
         return answer_text.strip()
     return result
+
+# 2025-08-07 업로드 파일에 대한 질의 실행 함수 (LLM 호출)
+def run_llm_chain(query, retriever):
+    global llm  # 로컬에서 실행 중인 Ollama 모델
+    #qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
+    result = qa_chain.invoke({"query": query})
+    return result["result"]
