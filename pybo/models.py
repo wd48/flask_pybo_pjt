@@ -5,6 +5,21 @@ db.Model 클래스를 상속하여 만든다
 - 이 때 사용한 db 객체는 pybo/__init__.py에서 생성한 SQLAlchemy 클래스의 객체이다.
 - db.Model 클래스를 상속받는 이유는 SQLAlchemy가 제공하는 ORM 기능을 사용하기 위함이다.
 '''
+
+# 추천인 : 질문에 투표하는 사용자와 질문 간의 다대다 관계를 정의
+question_voter = db.Table(
+    'question_voter',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('question_id', db.Integer, db.ForeignKey('question.id', ondelete='CASCADE'), primary_key=True)
+)
+
+# 추천인 : 답변에 투표하는 사용자와 답변 간의 다대다 관계를 정의
+answer_voter = db.Table(
+    'answer_voter',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('answer_id', db.Integer, db.ForeignKey('answer.id', ondelete='CASCADE'), primary_key=True)
+)
+
 # 질문 모델 생성
 class Question(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -14,6 +29,7 @@ class Question(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
     user = db.relationship('User', backref=db.backref('question_set'))
     modify_date = db.Column(db.DateTime(), nullable=True)
+    voter = db.relationship('User', secondary=question_voter, backref=db.backref('question_voter_set'))
 
 # 답변 모델 생성
 '''
@@ -39,6 +55,7 @@ class Answer(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
     user = db.relationship('User', backref=db.backref('answer_set'))
     modify_date = db.Column(db.DateTime(), nullable=True)
+    voter = db.relationship('User', secondary=answer_voter, backref=db.backref('answer_voter_set'))
 
 # 회원가입
 class User(db.Model):

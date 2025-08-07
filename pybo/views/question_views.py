@@ -80,3 +80,15 @@ def delete(question_id):
     db.session.delete(question)
     db.session.commit()
     return redirect(url_for('question._list'))  # 질문 목록 페이지로 리다이렉트
+
+# 2025-08-07, 질문 추천 기능 구현
+@bp.route('/vote/<int:question_id>')
+@login_required
+def vote(question_id):
+    _question = Question.query.get_or_404(question_id)
+    if g.user == _question.user:
+        flash('자신의 질문에 추천할 수 없습니다.')
+    else:
+        _question.voter.append(g.user)
+        db.session.commit()
+    return redirect(url_for('question.detail', question_id=question_id))

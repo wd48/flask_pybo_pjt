@@ -61,3 +61,15 @@ def delete(answer_id):
         db.session.delete(answer)
         db.session.commit()
     return redirect(url_for('question.detail', question_id=question_id))
+
+# 2025-08-05, 답변 추천 기능 구현
+@bp.route('/vote/<int:answer_id>/')
+@login_required
+def vote(answer_id):
+    _answer = Answer.query.get_or_404(answer_id)
+    if g.user == _answer.user:
+        flash('자신의 답변에 추천할 수 없습니다.')
+    else:
+        _answer.voter.append(g.user)
+        db.session.commit()
+    return redirect(url_for('question.detail', question_id=_answer.question.id))
