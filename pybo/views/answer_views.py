@@ -27,7 +27,8 @@ def create(question_id):
         answer = Answer(content=content, create_date=datetime.now(), user=g.user)
         question.answer_set.append(answer)
         db.session.commit()
-        return redirect(url_for('question.detail', question_id=question_id))
+        return redirect('{}#answer_{}'.format(
+            url_for('question.detail', question_id=question_id), answer.id))
     return render_template('question/question_detail.html', question=question, form=form)
 
 # 2025-08-05, 답변 수정 기능 구현
@@ -44,7 +45,8 @@ def modify(answer_id):
             form.populate_obj(answer)
             answer.modify_date = datetime.now() # 수정 날짜 업데이트
             db.session.commit()
-            return redirect(url_for('question.detail', question_id=answer.question.id))
+            return redirect('{}#answer_{}'.format(
+                url_for('question.detail', question_id=answer.question.id), answer.id))
     else: # GET 요청인 경우
         form = AnswerForm(obj=answer)
     return render_template('answer/answer_form.html', form=form)
@@ -72,4 +74,4 @@ def vote(answer_id):
     else:
         _answer.voter.append(g.user)
         db.session.commit()
-    return redirect(url_for('question.detail', question_id=_answer.question.id))
+    return redirect('{}#answer_{}'.format(url_for('question.detail', question_id=_answer.question.id), _answer.id))
