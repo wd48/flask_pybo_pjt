@@ -3,7 +3,7 @@
 - python 3.13.5
 - LangChain
 - embedding : jhgan/ko-sroberta-multitask
-- LLM : google/gemma-2b-it
+- LLM : google/gemma-2b-it, gemma3n:latest, exaone3.5:2.4b
 ## 추가예정
 - models
   - LLM : google/gemma-3n-E2B-it [huggingFace](https://huggingface.co/google/gemma-3n-E2B-it)
@@ -81,13 +81,9 @@ $ flask shell
 ---
 ## 플라스크+LangChain with RAG 프로젝트 구조
 ```text
-/
+flask_pybo/
 ├── config.py
-├── pybo.db
 ├── README.md
-├── structure.txt
-├── chroma_db/
-├── migrations/
 ├── pybo/
 │   ├── __init__.py
 │   ├── filter.py
@@ -97,34 +93,24 @@ $ flask shell
 │   │   ├── __init__.py
 │   │   ├── rag_pipeline.py
 │   │   ├── routes.py
-│   ├── resources/
-│   │   └── upload/
-│   ├── static/
-│   │   ├── bootstrap.min.css
-│   │   ├── bootstrap.min.js
-│   │   └── style.css
-│   ├── templates/
-│   │   ├── base.html
-│   │   ├── form_errors.html
-│   │   ├── navbar.html
-│   │   ├── auth/
-│   │   ├── question/
-│   │   └── rag_chat/
-│   └── views/
-│       ├── answer_views.py
-│       ├── auth_views.py
-│       ├── main_views.py
-│       ├── question_views.py
-├── resources/
-│   ├── bootstrap-5.1.3-dist.zip
-│   ├── requirements_250729.txt
-│   ├── requirements.txt
-│   └── models/
-│       ├── gemma-3n-E2B-it/
-│       └── ko-sroberta/
-├── vector_store/
-│   └── chroma.sqlite3
-├── venv2/
+│   │   ├── upload_utils.py
+│   └── resources/
+│       ├── models/
+│       └── uploads/
+│   └── static/
+│       ├── bootstrap.min.css
+│       ├── bootstrap.min.js
+│       └── style.css
+│   └── templates/
+│       ├── base.html
+│       ├── form_errors.html
+│       ├── navbar.html
+│       ├── answer/
+│       │   └── answer_form.html
+│       ├── auth/
+│       │   ├── login.html
+│       │   └── signup.html
+│       ├── question/
 ```
   
 - pybo 디렉터리 안에 있는 __init__.py 파일이 pybo.py 파일의 역할을 대신할 것
@@ -153,6 +139,8 @@ $ flask shell
 ## SQLite    
 - 파이썬 기본 패키지에 포함, 소규모 프로젝트에서 사용하는 가벼운 파일을 기반으로 한 데이터베이스
 - SQLite로 개발을 빠르게 진행하고 이후 운영 시스템 반영시에는 규모가 큰 데이터베이스로 교체함
+
+## chromaDB
 
 ## 쿠키와 세션
 - 웹 프로그램 : 웹 프라우저 요청 -> 서버 응답 순서로 실행되며, 서버 응답이 완료되면 웹 브라우저와 서버 사이의 네트워크 연결은 끊어진다
