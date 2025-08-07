@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request, url_for, g, flash
 from werkzeug.utils import redirect
 
 from .. import db
-from pybo.models import Question
+from pybo.models import Question, Answer, User
 from pybo.forms import QuestionForm, AnswerForm
 from pybo.views.auth_views import login_required
 
@@ -12,10 +12,21 @@ bp = Blueprint('question', __name__, url_prefix='/question')
 
 @bp.route('/list/')
 def _list():
-    page = request.args.get('page', type=int, default=1)  # 페이지 번호를 쿼리 파라미터에서 가져옴
+    page = request.args.get('page', type=int, default=1)
+    kw = request.args.get('kw', type=str, default='')
     question_list = Question.query.order_by(Question.create_date.desc())
-    question_list = question_list.paginate(page=page, per_page=10)  # 페이지네이션 처리
-    return render_template('question/question_list.html', question_list=question_list)
+    if kw:  # 검색어가 있는 경우
+        search = '%%{}%%'.format(kw)
+        sub_query = db.session.query(Answer.question_id, Answer.content, User.username).join(User, Answer.user_id == User.id).subquery()
+        question_list = question_list.join(User).outerjoin(sub_query, sub_query.c.question_id == Question.id) \
+                         .filter(Question.subject.ilike(search) |
+                                 Question.content.ilike(search) |
+                                 User.username.ilike(search) |
+                                 sub_query.c.content.ilike(search) |
+                                 sub_query.c.username.ilike(search)
+                                 ).distinct()  # 중복된 질문을 제거하기 위해 distinct() 사용
+    question_list = question_list.paginate(page=page, per_page=10)
+    return render_template('question/question_list.html', question_list=question_list, kw=kw, page=page)
 
 @bp.route('/detail/<int:question_id>/')
 def detail(question_id):

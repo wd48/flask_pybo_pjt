@@ -2,6 +2,7 @@ from flask import Flask
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import MetaData
+# from flaskext.markdown import Markdown
 
 import config
 '''
@@ -50,5 +51,8 @@ def create_app():
     # 2025-07-29, RAG 챗봇 기능을 위한 블루프린트 등록
     from .rag_chat import bp as rag_chat_bp
     app.register_blueprint(rag_chat_bp)
+
+    # 마크다운 확장
+    # Markdown(app, extensions=['nl2br', 'fenced_code'])
 
     return app

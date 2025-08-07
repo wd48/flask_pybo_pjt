@@ -1,6 +1,20 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="container my-3">
+    <div class="row my-3">
+        <div class="col-6">
+            <a href="{{ url_for('question.create') }}" class="btn btn-primary">질문 등록하기</a>
+        </div>
+        <div class="col-6">
+            <div class="input-group">
+                <!-- js에서 텍스트창에 입력된 값을 얻기 위한 id 속성 추가, 2025-08-07 jylee -->
+                <input type="text" id="search_kw" class="form-control" value="{{ kw or '' }}">
+                <div class="input-group-append">
+                    <button class="btn btn-outline-secondary" type="button" id="btn_search">찾기</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <table class="table">
         <thead>
         <tr class="text-center table-dark">
@@ -37,7 +51,7 @@
         <!-- 이전페이지 -->
         {% if question_list.has_prev %}
         <li class="page-item">
-            <a class="page-link" href="?page={{ question_list.prev_num }}">이전</a>
+            <a class="page-link" data-page="{{ question_list.prev_num }}" href="javascript:void(0)">이전</a>
         </li>
         {% else %}
         <li class="page-item disabled">
@@ -49,7 +63,7 @@
         {% if page_num %}
         {% if page_num != question_list.page %}
         <li class="page-item">
-            <a class="page-link" href="?page={{ page_num }}">{{ page_num }}</a>
+            <a class="page-link" data-page="{{ page_num }}" href="javascript:void(0)">{{ page_num }}</a>
         </li>
         {% else %}
         <li class="page-item active" aria-current="page">
@@ -65,7 +79,7 @@
         <!-- 다음페이지 -->
         {% if question_list.has_next %}
         <li class="page-item">
-            <a class="page-link" href="?page={{ question_list.next_num }}">다음</a>
+            <a class="page-link" data-page="{{ question_list.next_num }}" href="javascript:void(0)">다음</a>
         </li>
         {% else %}
         <li class="page-item disabled">
@@ -74,7 +88,30 @@
         {% endif %}
     </ul>
     <!-- 페이징처리 끝 -->
-    <!-- 질문 등록 버튼 -->
-    <a href="{{ url_for('question.create') }}" class="btn btn-primary">질문 등록하기</a>
+    <!-- 질문 등록 버튼 : 검색창 위치로 이동, 2025-08-07 jylee -->
 </div>
+<!-- 검색어와 페이지 정보를 유지하기 위한 폼 : page, kw를 동시에 GET 방식으로 요청가능 -->
+<form id="searchForm" method="get" action="{{ url_for('question._list') }}">
+    <input type="hidden" id="kw" name="kw" value="{{ kw or '' }}">
+    <input type="hidden" id="page" name="page" value="{{ page }}">
+</form>
+{% endblock %}
+{% block script %}
+<script type='text/javascript'>
+    // 페이지 번호 클릭시 페이지 정보를 유지하기 위한 폼에 값을 설정하고 제출
+    const page_elements = document.getElementsByClassName("page-link");
+    Array.from(page_elements).forEach(function(element) {
+        element.addEventListener('click', function() {
+            document.getElementById('page').value = this.dataset.page;
+            document.getElementById('searchForm').submit();
+        });
+    });
+    // 검색버튼 클릭시 검색어와 페이지 정보를 유지하기 위한 폼에 값을 설정하고 제출
+    const btn_search = document.getElementById("btn_search");
+    btn_search.addEventListener('click', function() {
+        document.getElementById('kw').value = document.getElementById('search_kw').value;
+        document.getElementById('page').value = 1;  // 검색버튼을 클릭할 경우 1페이지부터 조회한다.
+        document.getElementById('searchForm').submit();
+    });
+</script>
 {% endblock %}
