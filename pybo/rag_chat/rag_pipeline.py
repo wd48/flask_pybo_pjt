@@ -7,8 +7,8 @@ from langchain_community.llms import Ollama
 from langchain_chroma import Chroma
 from langchain.chains import RetrievalQA
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
 
+# 환경변수 로드
 load_dotenv()
 model_path = os.getenv("DATA_FILE_PATH")
 
@@ -19,6 +19,7 @@ embedding_model = HuggingFaceEmbeddings(
 )
 
 # 2025-08-06 문서 로딩 및 분할
+# 텍스트 파일 로딩 후 500자 단위로 나눈다
 def load_and_split_documents(file_path: str):
     loader = TextLoader(file_path, encoding="utf-8")
     docs = loader.load()
@@ -43,6 +44,7 @@ CHROMA_PATH = "./chroma_db"
 if not os.path.exists(CHROMA_PATH):
     os.makedirs(CHROMA_PATH)
 
+# 벡터DB가 존재하지 않으면 새로 생성
 vectordb = Chroma(
     collection_name="rag_kochat",
     embedding_function=embedding_model,
@@ -54,6 +56,7 @@ vectordb = Chroma(
 
 from langchain.prompts import PromptTemplate
 
+# 프롬프트 템플릿
 custom_prompt = PromptTemplate(
     input_variables=["context", "question"],
     template="""
@@ -91,3 +94,23 @@ def run_llm_chain(query, retriever):
     #qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
     result = qa_chain.invoke({"query": query})
     return result["result"]
+
+# 2025-08-11 감정분석 체인 만들기
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
+
+sentiment_prompt = PromptTemplate(
+    input_variables=["text"],
+    template="""
+        너는 텍스트의 감정을 분석하는 전문 감정 분석가야. 다음 문장을 읽고, 리뷰에 담긴 감정을 긍정(Positive), 부정(Negative), 중립(Neutral) 중 하나로 분류해줘. {text}
+        감정을 분류한 뒤, 그 근거도 함께 설명해줘.
+    """
+)
+
+sentiment_chain = LLMChain(
+    llm=llm,
+    prompt=sentiment_prompt
+)
+
+def analyze_sentiment(text: str):
+    return sentiment_chain.run(text)

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5">
+    <form method="POST">
+        <textarea name="text" placeholder="감정을 분석할 문장을 입력하세요" class="form-control" rows="4" cols="50"></textarea><br>
+        <button type="submit" class="btn btn-primary mt-2">분석</button>
+    </form>
+
+    {% if result %}
+        <div class="mt-4 p-3 border rounded bg-light">
+            <strong>감정 분석 결과:</strong> {{ result }}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

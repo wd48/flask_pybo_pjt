@@ -1,6 +1,6 @@
 # pybo/rag_chat/routes.py
 from flask import Blueprint, render_template, request, url_for, redirect, flash
-from .rag_pipeline import ask_rag, run_llm_chain
+from .rag_pipeline import ask_rag, run_llm_chain, analyze_sentiment
 from .upload_utils import save_and_embed_pdf, list_uploaded_pdfs, query_by_pdf
 
 bp = Blueprint("rag_chat", __name__, url_prefix="/chat")
@@ -58,3 +58,12 @@ def search_by_file():
     retriever = query_by_pdf(filename, query)
     answer = run_llm_chain(query, retriever)
     return render_template('rag_chat/file_list.html', files=list_uploaded_pdfs(), answer=answer, selected_file=filename)
+
+# 2025-08-11 감정분석
+@bp.route("/sentiment", methods=['GET','POST'])
+def sentiment():
+    result = None
+    if request.method == "POST":
+        text = request.form.get("text")
+        result = analyze_sentiment(text)
+    return render_template("rag_chat/sentiment.html", result=result)
