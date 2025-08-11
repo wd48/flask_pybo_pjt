@@ -2,10 +2,13 @@ from flask import Blueprint, url_for, render_template, flash, request, session, 
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import redirect
 import functools
+import secrets
+import string
 
 from pybo import db
-from pybo.forms import UserCreateForm, UserLoginForm
+from pybo.forms import UserCreateForm, UserLoginForm, PasswordResetRequestForm, PasswordChangeForm
 from pybo.models import User
+from pybo.email_utils import send_password_reset_email
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -80,3 +83,46 @@ def login_required(view):
             return redirect(url_for('auth.login', next=_next))
         return view(*arg, **kwargs)
     return wrapped_view
+
+# 2025-08-11 jylee, 비밀번호 찾기 - 임시 비밀번호 이메일 발송
+@bp.route('/reset_password/', methods=('GET', 'POST'))
+def reset_password():
+    form = PasswordResetRequestForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user:
+            # 임시 비밀번호 생성 (8자리 영문+숫자)
+            temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+
+            # 임시 비밀번호로 변경
+            user.password = generate_password_hash(temp_password)
+            db.session.commit()
+
+            # 이메일 발송
+            try:
+                send_password_reset_email(user.email, temp_password)
+                flash('임시 비밀번호가 이메일로 발송되었습니다. 이메일을 확인해주세요.')
+            except Exception as e:
+                # 이메일 발송 실패 시 임시 비밀번호를 화면에 표시 (개발/테스트용)
+                flash(f'이메일 발송에 실패했습니다. 임시 비밀번호: {temp_password}')
+            return redirect(url_for('auth.login'))
+        else:
+            flash('등록되지 않은 이메일 주소입니다.')
+    return render_template('auth/reset_password.html', form=form)
+
+# 2025-08-11 jylee 비밀번호 변경
+@bp.route('/change_password/', methods=('GET', 'POST'))
+@login_required
+def change_password():
+    form = PasswordChangeForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        # 현재 비밀번호 확인
+        if check_password_hash(g.user.password, form.current_password.data):
+            # 새 비밀번호로 변경
+            g.user.password = generate_password_hash(form.new_password1.data)
+            db.session.commit()
+            flash('비밀번호가 성공적으로 변경되었습니다.')
+            return redirect(url_for('main.index'))
+        else:
+            flash('현재 비밀번호가 일치하지 않습니다.')
+    return render_template('auth/change_password.html', form=form)

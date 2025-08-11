@@ -27,3 +27,13 @@ class UserLoginForm(FlaskForm):
 # 댓글 폼을 위한 FlaskForm 클래스 정의
 class CommentForm(FlaskForm):
     content = TextAreaField('댓글', validators=[DataRequired('댓글은 필수 입력 항목입니다.')])
+
+# 2025-08-11 jylee 비밀번호 찾기 폼
+class PasswordResetRequestForm(FlaskForm):
+    email = EmailField('이메일', validators=[DataRequired(), Email()])
+
+# 2025-08-11 jylee 비밀번호 변경 폼
+class PasswordChangeForm(FlaskForm):
+    current_password = PasswordField('현재 비밀번호', validators=[DataRequired()])
+    new_password1 = PasswordField('새 비밀번호', validators=[DataRequired(), Length(min=8)])
+    new_password2 = PasswordField('새 비밀번호 확인', validators=[DataRequired(), EqualTo('new_password1', '비밀번호가 일치하지 않습니다')])

@@ -16,6 +16,7 @@
                    value="{{ form.password.data or '' }}">
         </div>
         <button type="submit" class="btn btn-primary">로그인</button>
+        <a href="{{ url_for('auth.reset_password') }}" class="btn btn-link">비밀번호를 잊으셨나요?</a>
     </form>
 </div>
 {% endblock %}

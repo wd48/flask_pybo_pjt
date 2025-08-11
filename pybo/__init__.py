@@ -1,6 +1,7 @@
 from flask import Flask
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
+from flask_mail import Mail
 from sqlalchemy import MetaData
 # from flaskext.markdown import Markdown
 
@@ -21,6 +22,7 @@ naming_convention = {
 }
 db = SQLAlchemy(metadata=MetaData(naming_convention=naming_convention))
 migrate = Migrate()
+mail = Mail()
 from . import models  # 모델을 임포트하여 SQLAlchemy가 모델 클래스를 인식하도록 함
 
 def create_app():
@@ -29,6 +31,7 @@ def create_app():
 
     # ORM
     db.init_app(app)
+    mail.init_app(app)
 
     if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite'):
         migrate.init_app(app, db, render_as_batch=True)
