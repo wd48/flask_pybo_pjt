@@ -9,6 +9,7 @@
     </div>
     {% endfor %}
     <!-- 질문 -->
+    <!-- 제목 -->
     <h2 class="border-bottom py-2">{{ question.subject }}</h2>
     <div class="card my-3">
         <div class="card-body">
@@ -26,10 +27,6 @@
                 </div>
             </div>
             <div class="my-3">
-                <a href="javascript:void(0)" data-uri="{{ url_for('question.vote', question_id=question.id) }}"
-                   class="recommend btn btn-sm btn-outline-secondary"> 추천
-                    <span class="badge rounded-pill bg-success">{{ question.voter|length }}</span>
-                </a>
                 {% if g.user == question.user %}
                 <a href="{{ url_for('question.modify', question_id=question.id) }}"
                    class="btn btn-sm btn-outline-secondary">수정</a>
@@ -38,14 +35,63 @@
                 {% endif %}
             </div>
         </div>
+        <div class="my-action-buttons">
+            <a href="#" class="my-action" onclick="toggleCommentForm('question-{{ question.id }}'); return false;">
+                <i class="fas fa-comment"></i>댓글
+            </a>
+            <a href="javascript:void(0)" data-uri="{{ url_for('question.vote', question_id=question.id) }}" class="recommend my-action">
+                <i class="fas fa-thumbs-up"></i>추천 ({{ question.voter|length }})
+            </a>
+        </div>
+        <!-- 질문 댓글 -->
+        {% if question.comment_set %}
+            <div class="comment-block">
+                <div class="mt-2">
+                    {% for comment in question.comment_set %}
+                    <div class="comment py-2 text-muted">
+                        <span style="white-space: pre-line;">{{ comment.content }}</span>
+                        <span>
+                            - <a href="#" class="text-muted">{{ comment.user.username }}</a>,
+                            <i class="fas fa-clock ml-1"></i>{{ comment.create_date|datetime }}
+                            {% if comment.modify_date %}
+                            (수정:{{ comment.modify_date|datetime }})
+                            {% endif %}
+                        </span>
+                        {% if g.user == comment.user %}
+                        <a href="{{ url_for('comment.modify', comment_id=comment.id) }}" class="small">수정</a>,
+                        <a href="#" class="small delete" data-uri="{{ url_for('comment.delete', comment_id=comment.id) }}">삭제</a>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+        <div id="question-{{ question.id }}" class="comment-form my-3" style="display: none;">
+            {% if g.user %}
+            <form action="{{ url_for('comment.create_question_comment', question_id=question.id) }}" method="post" class="my-3">
+                {{ comment_form.csrf_token }}
+                <div class="mb-3">
+                    <textarea name="content" class="form-control" rows="2" placeholder="댓글을 입력하세요"></textarea>
+                </div>
+                <input type="submit" value="댓글등록" class="btn btn-primary btn-sm">
+            </form>
+            {% else %}
+            <div class="alert alert-warning">
+                댓글을 작성하려면 <a href="{{ url_for('auth.login') }}">로그인</a>이 필요합니다.
+            </div>
+            {% endif %}
+        </div>
     </div>
     <!-- 답변 목록 -->
     <div class="d-flex justify-content-between align-items-center my-3">
         <h5 class="border-bottom py-2">{{ answers.total }}개의 답변이 있습니다.</h5>
-        <div>
-            정렬:
-            <a href="{{ url_for('question.detail', question_id=question.id, sort='recent') }}" class="{% if sort=='recent' %}fw-bold{% endif %}">최신순</a> |
-            <a href="{{ url_for('question.detail', question_id=question.id, sort='recommend') }}" class="{% if sort=='recommend' %}fw-bold{% endif %}">추천순</a>
+        <div class="btn-group">
+            <a href="{{ url_for('question.detail', question_id=question.id, sort='recent') }}" class="{% if sort=='recent' %}fw-bold{% endif %}">
+                <i class="fas fa-thumbs-up"></i>최신순
+            </a>
+            <a href="{{ url_for('question.detail', question_id=question.id, sort='recommend') }}" class="{% if sort=='recommend' %}fw-bold{% endif %}">
+                <i class="fas fa-list"></i>추천순
+            </a>
         </div>
     </div>
     {% for answer in answers.items %}
@@ -65,17 +111,56 @@
                     <div>{{ answer.create_date|datetime }}</div>
                 </div>
             </div>
-            <div class="my-3">
-                <a href="javascript:void(0)" data-uri="{{ url_for('answer.vote', answer_id=answer.id) }}" class="recommend btn btn-sm btn-outline-secondary"> 추천
-                    <span class="badge rounded-pill bg-success">{{ answer.voter|length }}</span>
-                </a>
-                {% if g.user == answer.user %}
-                    <a href="{{ url_for('answer.modify', answer_id=answer.id) }}"
-                       class="btn btn-sm btn-outline-secondary">수정</a>
-                    <a href="#" class="delete btn btn-sm btn-outline-secondary "
-                       data-uri="{{ url_for('answer.delete', answer_id=answer.id) }}">삭제</a>
-                {% endif %}
+        </div>
+        <!-- 답변 댓글 -->
+        {% if answer.comment_set %}
+            <div class="mt-3">
+                {% for comment in answer.comment_set %}
+                <div class="comment py-2 text-muted">
+                    <span style="white-space: pre-line;">{{ comment.content }}</span>
+                    <span>
+                        - <a href="#" class="text-muted">{{ comment.user.username }}</a>, {{ comment.create_date|datetime }}
+                        {% if comment.modify_date %}
+                        (수정:{{ comment.modify_date|datetime }})
+                        {% endif %}
+                    </span>
+                    {% if g.user == comment.user %}
+                    <a href="{{ url_for('comment.modify', comment_id=comment.id) }}" class="small">수정</a>,
+                    <a href="#" class="small delete" data-uri="{{ url_for('comment.delete', comment_id=comment.id) }}">삭제</a>
+                    {% endif %}
+                </div>
+                {% endfor %}
             </div>
+        {% endif %}
+        <!--  -->
+        <div class="my-action-buttons">
+            <a href="#" class="my-action" onclick="toggleCommentForm('answer-{{ answer.id }}'); return false;">
+                <i class="fas fa-comment"></i>댓글
+            </a>
+            <a href="javascript:void(0)" data-uri="{{ url_for('question.vote', question_id=question.id) }}" class="recommend my-action">
+                <i class="fas fa-thumbs-up"></i>추천 ({{ question.voter|length }})
+            </a>
+            {% if g.user == answer.user %}
+                <a href="{{ url_for('answer.modify', answer_id=answer.id) }}"
+                   class="btn btn-sm btn-outline-secondary">수정</a>
+                <a href="#" class="delete btn btn-sm btn-outline-secondary "
+                   data-uri="{{ url_for('answer.delete', answer_id=answer.id) }}">삭제</a>
+                {% endif %}
+        </div>
+        <div id="answer-{{ answer.id }}" class="comment-form my-3" style="display: none;">
+            {% if g.user %}
+                <form action="{{ url_for('comment.create_answer_comment', answer_id=answer.id) }}" method="post" class="my-3">
+                    {{ comment_form.csrf_token }}
+                    <div class="mb-3">
+                        <textarea name="content" class="form-control" rows="2" placeholder="댓글을 입력하세요"></textarea>
+                    </div>
+                    <input type="submit" value="댓글등록" class="btn btn-primary btn-sm">
+                </form>
+            {% else %}
+            <div class="alert alert-warning">
+                댓글을 작성하려면 <a href="{{ url_for('auth.login') }}">로그인</a>이 필요합니다.
+            </div>
+            {% endif %}
         </div>
     </div>
     {% endfor %}
@@ -144,5 +229,14 @@
             };
         });
     });
+    // 댓글 폼 토글 함수
+    function toggleCommentForm(id) {
+        const form = document.getElementById(id);
+        if (form.style.display === "none" || form.style.display === "") {
+            form.style.display = "block";
+        } else {
+            form.style.display = "none";
+        }
+    }
 </script>
 {% endblock %}

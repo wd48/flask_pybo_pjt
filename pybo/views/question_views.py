@@ -6,7 +6,7 @@ from sqlalchemy import func
 
 from .. import db
 from pybo.models import Question, Answer, User
-from pybo.forms import QuestionForm, AnswerForm
+from pybo.forms import QuestionForm, AnswerForm, CommentForm
 from pybo.views.auth_views import login_required
 
 bp = Blueprint('question', __name__, url_prefix='/question')
@@ -35,6 +35,7 @@ def detail(question_id):
     sort = request.args.get('sort', type=str, default='recent')
     question = Question.query.get_or_404(question_id)
     form = AnswerForm()  # 답변 폼 생성
+    comment_form = CommentForm()  # 댓글 폼 생성
     # build answers query with sorting
     answers_query = Answer.query.filter(Answer.question_id == question_id)
     if sort == 'recommend':
@@ -42,7 +43,7 @@ def detail(question_id):
     else:
         answers_query = answers_query.order_by(Answer.create_date.desc())
     answers = answers_query.paginate(page=page, per_page=10)
-    return render_template('question/question_detail.html', question=question, form=form, answers=answers, sort=sort, page=page)
+    return render_template('question/question_detail.html', question=question, form=form, answers=answers, comment_form=comment_form, sort=sort, page=page)
 
 '''
 2025-07-25, 질문 등록 기능 구현

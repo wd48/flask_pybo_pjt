@@ -1,0 +1,266 @@
+/* ------------------------------------------------------ */
+/* Layout */
+html {
+    position: relative;
+    min-height: 100%;
+}
+body {
+    /* Margin bottom by footer height */
+    margin-bottom: 80px;
+    background: #eee;
+    font-size:0.9em;
+}
+.footer {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    /* Set the fixed height of the footer here */
+    height: 60px;
+
+    background-color: #f5f5f5;
+}
+
+.container {
+
+}
+
+#content {
+    background: #fff;
+}
+
+.content_block {
+    padding:20px;
+}
+
+/* ------------------------------------------------------ */
+/* 좌측메뉴 */
+#sidebar {
+    min-width:140px;
+}
+
+.list-group-item {
+    border-top:none !important;
+}
+
+/* ------------------------------------------------------ */
+/* 코멘트 */
+.comment {
+    border-top:solid 1px #eee;
+    font-size:0.75em;
+}
+
+/* ------------------------------------------------------ */
+/* 질문 & 답변 덩어리 */
+.card {
+    border:none;
+    border-radius: 0px;
+    background-color: #fff;
+}
+
+.author {
+    border-top: solid 1px #ddd;
+    border-bottom: dashed 1px #ddd;
+}
+a.author-link {
+    text-decoration: none;
+    color: #666;
+}
+
+.my-action-buttons {
+    color:#D5CCD5;
+}
+.my-action {
+    cursor: pointer;
+    background-color: #fff;
+    color: #777;
+    font-size:11px;
+    padding:3px;
+}
+.my-action:hover {
+    background-color: #777777;
+    color: #fff;
+    text-decoration: none;
+}
+
+
+/* ------------------------------------------------------ */
+/* Util */
+.line {
+    width: 100%;
+    height: 2px;
+    border-bottom: 1px solid #ccc;
+    margin: 20px 0;
+}
+
+/* ------------------------------------------------------ */
+/* 질문목록 */
+.table th, .table td {
+    padding: 8px;
+}
+
+a.subject-link:link,
+a.subject-link:visited,
+a.subject-link:active { color: #222; text-decoration: none; }
+a.subject-link:hover { color: #d9534f !important; text-decoration: none; }
+
+
+/* ------------------------------------------------------ */
+/* Markdown */
+.toc ul {
+    list-style-type: decimal;
+    padding:0 0 0 20px;
+    margin:0;
+}
+
+.toc {
+    border: dotted 1px #ccc;
+    background-color: #f9f9f9;
+    font-size:0.8em;
+    line-height:230%;
+    padding:10px;
+    margin:20px 0;
+}
+
+.mark-content h1,
+.mark-content h2,
+.mark-content h3,
+.mark-content h4,
+.mark-content h5,
+.mark-content h6
+{
+    font-size:1.2em;
+    font-weight: bold;
+    margin:30px 0;
+    color:#444;
+}
+
+.mark-content ul,
+.mark-content ol
+ {
+    padding:0 20px;
+}
+
+.mark-content blockquote {
+    color: rgba(0, 0, 0, .7);
+    padding: 10px;
+    border-left: 5px solid rgba(0, 0, 0, .1);
+    background:#f2f2f2;
+}
+
+.mark-content blockquote > p,
+.mark-content blockquote > ul,
+.mark-content blockquote > ol
+{
+    margin:0;
+}
+
+.mark-content img {
+    max-width: 100%;
+}
+
+/* textarea */
+.markdown-content {
+    /*width:680px;*/
+    height:200px !important;
+    font-size:12px;
+    line-height: 1.5;
+    margin-top:5px;
+}
+
+.mark-content table {
+    background-color: transparent;
+    border-collapse: collapse;
+    border-spacing: 0;
+    margin:20px 0;
+}
+
+.mark-content td,
+.mark-content th {
+    border-right: 1px solid #dcdcdc;
+    padding: 8px 12px
+}
+
+.mark-content td:last-child,
+.mark-content th:last-child {
+    border-right: 0
+}
+
+.mark-content td {
+    border-top: 1px solid #dcdcdc
+}
+
+.mark-content code {
+    background-color: rgba(0, 0, 0, .05);
+    border-radius: 3px;
+    padding: 2px 4px
+}
+
+.mark-content pre>code {
+    background-color: rgba(0, 0, 0, .05);
+    display: block;
+    padding: .5em;
+    -webkit-text-size-adjust: none;
+    overflow-x: auto;
+    white-space: pre-wrap;
+}
+
+/* ------------------------------------------------------ */
+/* Profile */
+#profile_base {
+    padding:20px;
+    border-left: solid 1px #dfe2e6;
+    border-right: solid 1px #dfe2e6;
+    border-bottom: solid 1px #dfe2e6;
+}
+.profile_title {
+    font-size:1.0em;
+    font-weight: bold;
+    margin:3px 0;
+}
+
+/* ------------------------------------------------------ */
+/* Privacy */
+.help {
+    margin-top:30px;
+    margin-bottom:50px;
+}
+
+.help-item {
+    margin-bottom:30px;
+}
+
+.help-question {
+    font-weight: bold;
+    margin-bottom:10px;
+}
+
+.help-answer {
+    padding:20px;
+    color:#000;
+    background-color: #f9f9f9;
+    border:solid 1px #ccc;
+    line-height: 1.8;
+
+}
+
+.terms {
+	margin:20px 0 20px 0;
+	font-size:12px;
+	color:#333;
+}
+.terms p {
+	margin:10px 0 10px 0;
+}
+.terms li {
+	margin-bottom:10px;
+}
+.terms_sub {
+	margin-top:5px;
+}
+.terms_sub li {
+	margin:0;
+}
+.terms_header {
+	font-weight:bold;
+	margin-bottom:5px;
+}
