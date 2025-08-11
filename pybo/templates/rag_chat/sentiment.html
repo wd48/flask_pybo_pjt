@@ -8,7 +8,8 @@
 
     {% if result %}
         <div class="mt-4 p-3 border rounded bg-light">
-            <strong>감정 분석 결과:</strong> {{ result }}
+            <strong>감정 분석 결과:</strong>
+           <pre style="white-space: pre-wrap; word-break: break-all; padding: 1em; border-radius: 0.5em;">{{ result }}</pre>
         </div>
     {% endif %}
 </div>

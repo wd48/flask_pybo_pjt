@@ -38,7 +38,7 @@ DATA_FILE_PATH=pybo/resources/models
   $ pip install -r resources/requirements.txt
     
 # 2. 데이터베이스 마이그레이션 적용 (최초 1회)
-  Alembic을 사용해 데이터베이스를 초기화합니다.
+#  Alembic을 사용해 데이터베이스를 초기화합니다.
   flask db upgrade
   
 # 3. HuggingFace 모델 다운로드 (최초 1회)
