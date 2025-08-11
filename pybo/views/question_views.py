@@ -31,11 +31,13 @@ def _list():
 
 @bp.route('/detail/<int:question_id>/')
 def detail(question_id):
+    # URL에서 question_id를 정수형으로 가져오고, 페이지 번호와 정렬 방식도 가져옴
+    # request.args.get() : 쿼리 문자열에서 값을 가져오는 함수
     page = request.args.get('page', type=int, default=1)
     sort = request.args.get('sort', type=str, default='recent')
     question = Question.query.get_or_404(question_id)
 
-    # 조회 수 증가 (view_count가 None인 경우 0으로 초기화)
+    # [조회수 기능] 조회 수 증가 (view_count가 None인 경우 0으로 초기화)
     if question.view_count is None:
         question.view_count = 1
     else:
@@ -46,9 +48,10 @@ def detail(question_id):
     comment_form = CommentForm()  # 댓글 폼 생성
     # build answers query with sorting
     answers_query = Answer.query.filter(Answer.question_id == question_id)
-    if sort == 'recommend':
+    # 게시글 내 정렬 방식에 따른 답변 정렬
+    if sort == 'recommend': # 추천순
         answers_query = answers_query.outerjoin(Answer.voter).group_by(Answer.id).order_by(func.count(User.id).desc(), Answer.create_date.desc())
-    else:
+    else: # 최신순
         answers_query = answers_query.order_by(Answer.create_date.desc())
     answers = answers_query.paginate(page=page, per_page=10)
     return render_template('question/question_detail.html', question=question, form=form, answers=answers, comment_form=comment_form, sort=sort, page=page)
