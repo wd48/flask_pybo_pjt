@@ -171,3 +171,20 @@ huggingface-cli login
 hf download jhgan/ko-sroberta-multitask --local-dir .resources/models/ko-sroberta
 hf download google/gemma-3n-E2B-it --local-dir .resources/models/gemma-3n-E2B-it
 ```
+
+## flask pybo 앱 추가 구현기능
+
+- ✅답변 페이징과 정렬
+  - 답변에 페이징과 정렬 적용 (question_views.py)
+- ✅댓글
+  - 질문 또는 답변에 댓글 기능 구현
+- ⏸️카테고리
+- ✅비밀번호 찾기와 변경
+  - 비밀번호 분실 시 임시 비밀번호를 '가입할 때 등록한 이메일 주소로 발송'하여 로그인
+  - 비밀번호 변경 : 임시 비밀번호로 로그인 후 비밀번호 변경
+- ⏸️프로필
+- ⏸️최근 답변과 최근 댓글
+- ✅조회 수
+  - 목록과 상세 페이지에 조회 수 표시
+- ⏸️소셜 로그인
+- ⏸️마크다운 에디터
