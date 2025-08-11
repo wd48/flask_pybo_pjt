@@ -30,6 +30,7 @@ class Question(db.Model):
     user = db.relationship('User', backref=db.backref('question_set'))
     modify_date = db.Column(db.DateTime(), nullable=True)
     voter = db.relationship('User', secondary=question_voter, backref=db.backref('question_voter_set'))
+    view_count = db.Column(db.Integer, default=0)  # 조회 수 필드 추가
 
 # 답변 모델 생성
 '''

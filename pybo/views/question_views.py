@@ -34,6 +34,14 @@ def detail(question_id):
     page = request.args.get('page', type=int, default=1)
     sort = request.args.get('sort', type=str, default='recent')
     question = Question.query.get_or_404(question_id)
+
+    # 조회 수 증가 (view_count가 None인 경우 0으로 초기화)
+    if question.view_count is None:
+        question.view_count = 1
+    else:
+        question.view_count += 1
+    db.session.commit()
+
     form = AnswerForm()  # 답변 폼 생성
     comment_form = CommentForm()  # 댓글 폼 생성
     # build answers query with sorting
