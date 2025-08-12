@@ -26,7 +26,7 @@ pip install flask-migrate
 
 # .env 설정파일 생성 필요
 HUGGINGFACEHUB_API_TOKEN=hugging face 사용자 토큰
-DATA_FILE_PATH=pybo/resources/models
+DATA_FILE_PATH=/models
 
 # 1. 가상환경 활성화 및 패키지 설치: venv2 가상환경을 활성화합니다.
   # Windows
