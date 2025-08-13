@@ -9,11 +9,23 @@ bp = Blueprint("rag_chat", __name__, url_prefix="/chat")
 @bp.route("/", methods=["GET", "POST"])
 def index():
     answer = ""
+    selected_file = ""
+    files = list_uploaded_pdfs()
+    
     if request.method == "POST":
         question = request.form.get("question")
-        if question:
+        selected_file = request.form.get("filename")
+        if question and selected_file:
+            retriever = get_pdf_retriever(selected_file)
+            answer = run_llm_chain(question, retriever)
+            print(f"[-RAG-] Answer generated for question: {question} using file: {selected_file}")
+        elif question:
             answer = ask_rag(question)
-    return render_template("rag_chat/chat.html", answer=answer)
+            print(f"[-RAG-] [no file] Answer generated for question: {question} without file")
+        else:
+            flash("파일과 질문을 모두 입력하세요")
+
+    return render_template("rag_chat/chat.html", answer=answer, files=files, selected_file=selected_file)
 
 # 2025-08-07 파일 업로드 라우트
 @bp.route("/upload", methods=['GET','POST'])

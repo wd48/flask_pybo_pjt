@@ -5,6 +5,15 @@
 <div class="container mt-5">
     <h3>📚 한글 RAG 챗봇</h3>
     <form method="post">
+        <div class="mb-3">
+            <label for="filename" class="form-label">PDF 선택</label>
+            <select name="filename" class="form-select">
+                <option value="">-- 전체 문서에서 질문하기 --</option>
+                {% for file in files %}
+                    <option value="{{ file }}" {% if file == selected_file %}selected{% endif %}>{{ file }}</option>
+                {% endfor %}
+            </select>
+        </div>
         <div class="form-group">
             <label>질문:</label>
             <input type="text" class="form-control" name="question" required>
