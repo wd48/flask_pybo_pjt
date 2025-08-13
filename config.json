@@ -1,0 +1,46 @@
+{
+  "database" : {
+    "host": "localhost",
+    "db_port": 3306,
+    "username": "user",
+    "password": "pass",
+    "persist_dir": "/chroma_db",
+    "database_name": "chroma"
+  },
+  "llm" : {
+    "llm_model": "gemma3n:latest"
+  },
+  "chunk" : {
+    "embedding_model": "jhgan/ko-sroberta-multitask",
+    "chunk_size": 800,
+    "chunk_overlap": 50
+  },
+  "retriever": {
+    "search_type": {
+      "similarity": {
+        "k": 3
+      },
+      "mmr": {
+        "k": 3,
+        "fetch_k": 10,
+        "lambda_mult": 0.6
+      },
+      "similarity_score_threshold": {
+        "score_threshold": 0.8
+      },
+      "max_similar": {
+        "k": 3,
+        "distance_metric": "euclidean"
+      },
+      "approx_knn": {
+        "k": 10,
+        "nprobe": 5
+      }
+    },
+    "metadata_filter": [
+      "keywords",
+      "title"
+    ],
+    "include_metadata": "true"
+  }
+}

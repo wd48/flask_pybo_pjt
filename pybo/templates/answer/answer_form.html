@@ -15,3 +15,17 @@
     </form>
 </div>
 {% endblock %}
+{% block script %}
+<script>
+    // SimpleMDE 마크다운 에디터 초기화
+    var simplemde = new SimpleMDE({
+        element: document.getElementById("content"),
+        placeholder: "답변을 마크다운으로 작성하세요...",
+        spellChecker: false,
+        renderingConfig: {
+            singleLineBreaks: false,
+        },
+        toolbar: ["bold", "italic", "heading", "|", "quote", "unordered-list", "ordered-list", "|", "link", "image", "|", "preview", "side-by-side", "fullscreen", "|", "guide"]
+    });
+</script>
+{% endblock %}

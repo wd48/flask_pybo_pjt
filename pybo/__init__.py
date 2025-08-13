@@ -3,7 +3,7 @@ from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail
 from sqlalchemy import MetaData
-# from flaskext.markdown import Markdown
+from flask_mail import Mail
 
 import config
 '''
@@ -28,6 +28,14 @@ from . import models  # 모델을 임포트하여 SQLAlchemy가 모델 클래스
 def create_app():
     app = Flask(__name__)
     app.config.from_object(config)
+
+    # LLM 모델 로드를 애플리케이션 컨텍스트 내에서 실행
+    with app.app_context():
+        try:
+            from .rag_chat.chat.chatbot import load_llm
+            load_llm(app.config['LLM_MODEL'])  # LLM 모델 로드
+        except ImportError:
+            pass  # chatbot 모듈이 없으면 무시
 
     # ORM
     db.init_app(app)
@@ -57,7 +65,7 @@ def create_app():
     from .rag_chat import bp as rag_chat_bp
     app.register_blueprint(rag_chat_bp)
 
-    # 마크다운 확장
+    # 마크다운 확장 - 현재 주석 처리됨
     # Markdown(app, extensions=['nl2br', 'fenced_code'])
 
     return app

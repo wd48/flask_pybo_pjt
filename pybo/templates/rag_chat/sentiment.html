@@ -9,8 +9,23 @@
     {% if result %}
         <div class="mt-4 p-3 border rounded bg-light">
             <strong>감정 분석 결과:</strong>
-           <pre style="white-space: pre-wrap; word-break: break-all; padding: 1em; border-radius: 0.5em;">{{ result }}</pre>
+           <div id="result-content" style="padding: 1em; border-radius: 0.5em;">{{ result|safe }}</div>
         </div>
     {% endif %}
 </div>
+{% endblock %}
+{% block script %}
+<script>
+    {% if result %}
+    // 마크다운 결과 렌더링
+    document.addEventListener('DOMContentLoaded', function() {
+        const resultContent = document.getElementById('result-content');
+        if (resultContent) {
+            // SimpleMDE의 마크다운 파서를 사용하여 결과를 HTML로 변환
+            const markdown = `{{ result|replace('\n', '\\n')|replace('"', '\\"') }}`;
+            resultContent.innerHTML = SimpleMDE.prototype.markdown(markdown);
+        }
+    });
+    {% endif %}
+</script>
 {% endblock %}

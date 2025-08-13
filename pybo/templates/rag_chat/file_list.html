@@ -22,9 +22,25 @@
 
   {% if answer %}
     <div class="mt-4 alert alert-success">
-      <strong>💡 답변:</strong>
-      <pre style="white-space: pre-wrap; word-break: break-all; padding: 1em; border-radius: 0.5em;">{{ answer }}</pre>
+        <strong>💡 답변:</strong>
+      <!--pre style="white-space: pre-wrap; word-break: break-all; padding: 1em; border-radius: 0.5em;">{{ answer }}</pre-->
+        <div id="result-content" style="padding: 1em; border-radius: 0.5em;">{{ answer|safe }}</div>
     </div>
   {% endif %}
 </div>
+{% endblock %}
+{% block script %}
+<script>
+    {% if answer %}
+    // 마크다운 결과 렌더링
+    document.addEventListener('DOMContentLoaded', function() {
+        const resultContent = document.getElementById('result-content');
+        if (resultContent) {
+            // SimpleMDE의 마크다운 파서를 사용하여 결과를 HTML로 변환
+            const markdown = `{{ answer|replace('\n', '\\n')|replace('"', '\\"') }}`;
+            resultContent.innerHTML = SimpleMDE.prototype.markdown(markdown);
+        }
+    });
+    {% endif %}
+</script>
 {% endblock %}

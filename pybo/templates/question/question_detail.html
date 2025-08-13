@@ -211,7 +211,7 @@
         {% endif %}
         <!-- 오류표시 End -->
         <div class="mb-3">
-            <textarea {% if not g.user %}disabled{% endif %} name="content" id="content" class="form-control" rows="10"></textarea>
+            <textarea {% if not g.user %}disabled{% endif %} name="content" id="answer-content" class="form-control" rows="10"></textarea>
         </div>
         <input type="submit" value="답변등록" class="btn btn-primary">
     </form>
@@ -245,5 +245,18 @@
             form.style.display = "none";
         }
     }
+
+    // 답변 등록 폼에 SimpleMDE 마크다운 에디터 적용
+    {% if g.user %}
+    var answerMDE = new SimpleMDE({
+        element: document.getElementById("answer-content"),
+        placeholder: "답변을 마크다운으로 작성하세요...",
+        spellChecker: false,
+        renderingConfig: {
+            singleLineBreaks: false,
+        },
+        toolbar: ["bold", "italic", "heading", "|", "quote", "unordered-list", "ordered-list", "|", "link", "image", "|", "preview", "side-by-side", "fullscreen", "|", "guide"]
+    });
+    {% endif %}
 </script>
 {% endblock %}

@@ -15,8 +15,23 @@
     {% if answer %}
     <div class="mt-4 p-3 border rounded bg-light">
         <strong>답변:</strong>
-        <pre style="white-space: pre-wrap; word-break: break-all; padding: 1em; border-radius: 0.5em;">{{ answer }}</pre>
+        <div id="answer-content" style="padding: 1em; border-radius: 0.5em;">{{ answer|safe }}</div>
     </div>
     {% endif %}
 </div>
+{% endblock %}
+{% block script %}
+<script>
+    {% if answer %}
+    // 마크다운 답변 렌더링
+    document.addEventListener('DOMContentLoaded', function() {
+        const answerContent = document.getElementById('answer-content');
+        if (answerContent) {
+            // SimpleMDE의 마크다운 파서를 사용하여 답변을 HTML로 변환
+            const markdown = `{{ answer|replace('\n', '\\n')|replace('"', '\\"') }}`;
+            answerContent.innerHTML = SimpleMDE.prototype.markdown(markdown);
+        }
+    });
+    {% endif %}
+</script>
 {% endblock %}
