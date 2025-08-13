@@ -1,0 +1,48 @@
+<!-- templates/rag_chat/files.html -->
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2>📂 문서 관리</h2>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="mt-3 alert alert-info">
+          {% for message in messages %}
+            <div>{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+  <div class="card mb-4">
+    <div class="card-header">
+        <h4>📄 PDF 문서 업로드</h4>
+    </div>
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label for="pdf_file" class="form-label">PDF 파일 선택</label>
+          <input type="file" class="form-control" name="pdf_file" accept=".pdf" required>
+        </div>
+        <button type="submit" class="btn btn-primary">업로드</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 업로드된 문서 목록 -->
+  <div class="card">
+    <div class="card-header">
+        <h4>📚 업로드된 문서 목록</h4>
+    </div>
+    <ul class="list-group list-group-flush">
+      {% if files %}
+        {% for file in files %}
+          <li class="list-group-item">{{ file }}</li>
+        {% endfor %}
+      {% else %}
+        <li class="list-group-item text-muted">업로드된 문서가 없습니다.</li>
+      {% endif %}
+    </ul>
+  </div>
+
+</div>
+{% endblock %}
