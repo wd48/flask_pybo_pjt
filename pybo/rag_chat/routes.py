@@ -63,6 +63,22 @@ def manage_files():
 def sentiment():
     result = None
     if request.method == "POST":
-        text = request.form.get("text")
-        result = analyze_sentiment(text)
+        gender = request.form.get('gender')
+        age = request.form.get('age')
+        emotion = request.form.get('emotion')
+        meaning = request.form.get('meaning')
+        action = request.form.get('action')
+        reflect = request.form.get('reflect')
+        anchor = request.form.get('anchor')
+
+        result = analyze_sentiment(
+            gender=gender,
+            age=age,
+            emotion=emotion,
+            meaning=meaning,
+            action=action,
+            reflect=reflect,
+            anchor=anchor
+        )
+
     return render_template("rag_chat/sentiment.html", result=result)

@@ -84,10 +84,21 @@ def get_sentiment_chain():
     global sentiment_chain
     if sentiment_chain is None:
         sentiment_prompt = PromptTemplate(
-            input_variables=["text"],
+            input_variables=["gender", "age", "emotion", "meaning", "action", "reflect", "anchor"],
             template="""
-                너는 텍스트의 감정을 분석하는 전문 감정 분석가야. 다음 문장을 읽고, 리뷰에 담긴 감정을 긍정(Positive), 부정(Negative), 중립(Neutral) 중 하나로 분류해줘. {text}
-                감정을 분류한 뒤, 그 근거도 함께 설명해줘.
+                당신은 사용자의 감정 기록을 분석하는 전문 상담가입니다. 사용자의 다음 기록을 바탕으로 감정 상태를 진단하고, 행동이 어떤 의미를 가지는지 분석하여 정확하고 적절한 답변을 제공하세요.
+
+                --- 감정 기록 ---
+                성별: {gender}
+                연령대: {age}
+                걷기 전 감정: {emotion}
+                감정을 느낀 이유: {meaning}
+                도움이 된 행동: {action}
+                행동 후 긍정적인 변화: {reflect}
+                오늘의 한마디: {anchor}
+                ---
+
+                위 기록을 바탕으로 분석하고 답변해 주세요.
             """
         )
 
@@ -162,7 +173,13 @@ def run_llm_chain(query, retriever):
     return result["result"]
 
 # 2025-08-11 감정 분석 함수 : 주어진 텍스트에 대해 감정 분석을 수행하는 함수
-def analyze_sentiment(text: str):
+def analyze_sentiment(gender: str, age: str, emotion: str, meaning: str, action: str, reflect: str, anchor: str):
     chain = get_sentiment_chain()
-    print(f"[-RAG-] analyze_sentiment() text: {text}")
-    return chain.run(text)
+    print(f"[-RAG-] analyze_sentiment() for emotional record")
+    return chain.run(gender=gender,
+        age=age,
+        emotion=emotion,
+        meaning=meaning,
+        action=action,
+        reflect=reflect,
+        anchor=anchor)

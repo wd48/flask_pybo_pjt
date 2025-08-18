@@ -1,16 +1,119 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="container mt-5">
-  <h2>🎭 감정 분석</h2>
+  <h3>감정 기록 분석</h3>
     <form method="POST">
-        <textarea name="text" placeholder="감정을 분석할 문장을 입력하세요" class="form-control" rows="4" cols="50"></textarea><br>
+        <div class="mb-3">
+            <label class="form-label">성별은 어떻게 되십니까?</label>
+            <div>
+                <input type="radio" id="gender-male" name="gender" value="남성" checked>
+                <label for="gender-male">남성</label>
+                <input type="radio" id="gender-female" name="gender" value="여성">
+                <label for="gender-female">여성</label>
+                <input type="radio" id="gender-other" name="gender" value="기타">
+                <label for="gender-other">기타</label>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label for="age" class="form-label">연령대는 어떻게 되십니까?</label>
+            <select id="age" name="age" class="form-select">
+                <option value="10대">10대</option>
+                <option value="20대">20대</option>
+                <option value="30대" selected>30대</option>
+                <option value="40대">40대</option>
+                <option value="50대">50대</option>
+                <option value="60대">60대</option>
+                <option value="70대이상">70대이상</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">E. 감정(Emotion) 걷기 전 가장 크게 느꼈던 감정 1가지를 선택하세요.</label>
+            <div class="d-flex flex-wrap gap-2">
+                <input type="radio" id="emotion-joy" name="emotion" value="기쁨" class="btn-check">
+                <label for="emotion-joy" class="btn btn-outline-primary">기쁨</label>
+                <input type="radio" id="emotion-calm" name="emotion" value="평온" class="btn-check">
+                <label for="emotion-calm" class="btn btn-outline-primary">평온</label>
+                <input type="radio" id="emotion-gratitude" name="emotion" value="감사" class="btn-check">
+                <label for="emotion-gratitude" class="btn btn-outline-primary">감사</label>
+                <input type="radio" id="emotion-calmness" name="emotion" value="담담함" class="btn-check">
+                <label for="emotion-calmness" class="btn btn-outline-primary">담담함</label>
+                <input type="radio" id="emotion-boredom" name="emotion" value="지루함" class="btn-check">
+                <label for="emotion-boredom" class="btn btn-outline-primary">지루함</label>
+                <input type="radio" id="emotion-tiredness" name="emotion" value="피곤함" class="btn-check">
+                <label for="emotion-tiredness" class="btn btn-outline-primary">피곤함</label>
+                <input type="radio" id="emotion-anxiety" name="emotion" value="불안" class="btn-check">
+                <label for="emotion-anxiety" class="btn btn-outline-primary">불안</label>
+                <input type="radio" id="emotion-depression" name="emotion" value="우울" class="btn-check">
+                <label for="emotion-depression" class="btn btn-outline-primary">우울</label>
+                <input type="radio" id="emotion-anger" name="emotion" value="분노" class="btn-check">
+                <label for="emotion-anger" class="btn btn-outline-primary">분노</label>
+                <input type="radio" id="emotion-other" name="emotion" value="기타" class="btn-check">
+                <label for="emotion-other" class="btn btn-outline-primary">기타</label>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label for="meaning" class="form-label">M. 의미(Meaning) 왜 그런 감정을 느꼈는 지 적어주세요.</label>
+            <textarea id="meaning" name="meaning" class="form-control" rows="3"></textarea>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">A. 행동(Action) 나의 감정에 도움이 된 오늘의 행동을 모두 선택하세요.</label>
+            <div class="d-flex flex-wrap gap-2">
+                <input type="checkbox" id="action-walk" name="action" value="걷기" class="btn-check">
+                <label for="action-walk" class="btn btn-outline-secondary">걷기</label>
+                <input type="checkbox" id="action-barefoot" name="action" value="맨발걷기" class="btn-check">
+                <label for="action-barefoot" class="btn btn-outline-secondary">맨발걷기</label>
+                <input type="checkbox" id="action-affirmation" name="action" value="긍정확언" class="btn-check">
+                <label for="action-affirmation" class="btn btn-outline-secondary">긍정확언</label>
+                <input type="checkbox" id="action-breathing" name="action" value="심호흡" class="btn-check">
+                <label for="action-breathing" class="btn btn-outline-secondary">심호흡</label>
+                <input type="checkbox" id="action-talk" name="action" value="대화" class="btn-check">
+                <label for="action-talk" class="btn btn-outline-secondary">대화</label>
+                <input type="checkbox" id="action-stretch" name="action" value="스트레칭" class="btn-check">
+                <label for="action-stretch" class="btn btn-outline-secondary">스트레칭</label>
+                <input type="checkbox" id="action-music" name="action" value="음악듣기" class="btn-check">
+                <label for="action-music" class="btn btn-outline-secondary">음악듣기</label>
+                <input type="checkbox" id="action-rest" name="action" value="휴식" class="btn-check">
+                <label for="action-rest" class="btn btn-outline-secondary">휴식</label>
+                <input type="checkbox" id="action-writing" name="action" value="글쓰기" class="btn-check">
+                <label for="action-writing" class="btn btn-outline-secondary">글쓰기</label>
+                <input type="checkbox" id="action-other" name="action" value="기타" class="btn-check">
+                <label for="action-other" class="btn btn-outline-secondary">기타</label>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">R. 성찰 (Reflect) 행동 후, 어떤 긍정적인 변화가 느껴지는 지 모두 체크해주세요.</label>
+            <div class="d-flex flex-wrap gap-2">
+                <input type="checkbox" id="reflect-light" name="reflect" value="가벼워요" class="btn-check">
+                <label for="reflect-light" class="btn btn-outline-success">가벼워요</label>
+                <input type="checkbox" id="reflect-calm" name="reflect" value="평온해요" class="btn-check">
+                <label for="reflect-calm" class="btn btn-outline-success">평온해요</label>
+                <input type="checkbox" id="reflect-happy" name="reflect" value="기뻐요" class="btn-check">
+                <label for="reflect-happy" class="btn btn-outline-success">기뻐요</label>
+                <input type="checkbox" id="reflect-comfortable" name="reflect" value="편안해요" class="btn-check">
+                <label for="reflect-comfortable" class="btn btn-outline-success">편안해요</label>
+                <input type="checkbox" id="reflect-good" name="reflect" value="좋아요" class="btn-check">
+                <label for="reflect-good" class="btn btn-outline-success">좋아요</label>
+                <input type="checkbox" id="reflect-energetic" name="reflect" value="활력있어요" class="btn-check">
+                <label for="reflect-energetic" class="btn btn-outline-success">활력있어요</label>
+                <input type="checkbox" id="reflect-hopeful" name="reflect" value="희망적이예요" class="btn-check">
+                <label for="reflect-hopeful" class="btn btn-outline-success">희망적이예요</label>
+                <input type="checkbox" id="reflect-grateful" name="reflect" value="감사해요" class="btn-check">
+                <label for="reflect-grateful" class="btn btn-outline-success">감사해요</label>
+                <input type="checkbox" id="reflect-other" name="reflect" value="기타" class="btn-check">
+                <label for="reflect-other" class="btn btn-outline-success">기타</label>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label for="anchor" class="form-label">A. 고정(Anchor ) 오늘 하루, 나를 위한 한마디를 적어주세요.</label>
+            <textarea id="anchor" name="anchor" class="form-control" rows="2"></textarea>
+        </div>
         <button type="submit" class="btn btn-primary mt-2">분석</button>
     </form>
 
     {% if result %}
         <div class="mt-4 p-3 border rounded bg-light">
             <strong>감정 분석 결과:</strong>
-           <div id="result-content" style="padding: 1em; border-radius: 0.5em;">{{ result|safe }}</div>
+            <div id="result-content" style="padding: 1em; border-radius: 0.5em;">{{ result|safe }}</div>
         </div>
     {% endif %}
 </div>
