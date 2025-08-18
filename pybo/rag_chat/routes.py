@@ -2,6 +2,7 @@
 from flask import Blueprint, render_template, request, url_for, redirect, flash
 from .pipeline import ask_rag, run_llm_chain, analyze_sentiment
 from .upload_utils import save_pdf_and_index, list_uploaded_pdfs, query_by_pdf, get_pdf_retriever, get_collection_names
+from .metrics import get_chatbot_metrics, get_sentiment_metrics
 
 bp = Blueprint("rag_chat", __name__, url_prefix="/chat")
 
@@ -67,8 +68,10 @@ def sentiment():
         age = request.form.get('age')
         emotion = request.form.get('emotion')
         meaning = request.form.get('meaning')
-        action = request.form.get('action')
-        reflect = request.form.get('reflect')
+        action_list = request.form.getlist('action')  # 체크박스는 리스트로 받아옴
+        action = ', '.join(action_list) if action_list else '없음'
+        reflect_list = request.form.getlist('reflect')  # 체크박스는 리스트로 받아옴
+        reflect = ', '.join(reflect_list) if reflect_list else '없음'
         anchor = request.form.get('anchor')
 
         result = analyze_sentiment(
@@ -82,3 +85,25 @@ def sentiment():
         )
 
     return render_template("rag_chat/sentiment.html", result=result)
+
+
+# 2025-08-18 성능 시각화 페이지 라우트
+@bp.route("/performance")
+def performance():
+    chatbot_data = get_chatbot_metrics()
+    sentiment_data = get_sentiment_metrics()
+
+    # Chart.js에 전달할 데이터 형식으로 변환
+    chatbot_labels = [item['timestamp'] for item in chatbot_data]
+    chatbot_values = [item['duration'] for item in chatbot_data]
+
+    sentiment_labels = list(sentiment_data.keys())
+    sentiment_values = list(sentiment_data.values())
+
+    return render_template(
+        "rag_chat/performance.html",
+        chatbot_labels=chatbot_labels,
+        chatbot_values=chatbot_values,
+        sentiment_labels=sentiment_labels,
+        sentiment_values=sentiment_values
+    )

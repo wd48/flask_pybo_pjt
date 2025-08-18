@@ -1,5 +1,6 @@
 # pybo/rag_chat/pipeline.py
 import os
+import time
 from dotenv import load_dotenv
 from flask import current_app
 from langchain.chains import LLMChain, RetrievalQA
@@ -9,6 +10,7 @@ from langchain_community.document_loaders import TextLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.llms import Ollama
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from .metrics import log_chatbot_response_time, log_sentiment_result
 
 # 환경변수 로드
 load_dotenv()
@@ -168,7 +170,10 @@ def ask_rag(query: str):
 # 특정 retriever를 사용하여 질문에 대한 답변을 생성하는 함수 : retriever는 PDF 파일에 대한 검색 기능을 제공
 def run_llm_chain(query, retriever):
     chain = get_qa_chain(retriever)
+    start_time = time.time()
     result = chain.invoke({"query": query})
+    end_time = time.time()
+    log_chatbot_response_time(end_time - start_time)
     print(f"[-RAG-] run_llm_chain() result: {result}")
     return result["result"]
 
@@ -176,10 +181,34 @@ def run_llm_chain(query, retriever):
 def analyze_sentiment(gender: str, age: str, emotion: str, meaning: str, action: str, reflect: str, anchor: str):
     chain = get_sentiment_chain()
     print(f"[-RAG-] analyze_sentiment() for emotional record")
-    return chain.run(gender=gender,
+
+    start_time = time.time()
+    response = chain.run(
+        gender=gender,
         age=age,
         emotion=emotion,
         meaning=meaning,
         action=action,
         reflect=reflect,
-        anchor=anchor)
+        anchor=anchor
+    )
+    end_time = time.time()
+    log_chatbot_response_time(end_time - start_time)
+
+    # LLM 응답을 파싱하여 감정 분류를 추출
+    sentiment_class = "분류불가"
+    if "긍정(Positive)" in response:
+        sentiment_class = "긍정(Positive)"
+    elif "부정(Negative)" in response:
+        sentiment_class = "부정(Negative)"
+    elif "중립(Neutral)" in response:
+        sentiment_class = "중립(Neutral)"
+
+    # 결과에서 감정 분류를 추출하여 로그
+    # 예시로 'Positive', 'Negative', 'Neutral' 중 하나로 가정
+    # LLM이 분류한 감정 클래스를 직접 파싱하는 로직이 필요
+    # LLM 응답을 파싱하여 실제 감정 분류를 추출해야 함
+    # 이 부분은 LLM의 응답 형식을 보고 적절히 파싱하여 수정해야 합니다.
+    log_sentiment_result(sentiment_class)
+
+    return response

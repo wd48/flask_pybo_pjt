@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>📊 성능 분석</h2>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4>챗봇 응답 시간 (초)</h4>
+                </div>
+                <div class="card-body">
+                    <canvas id="chatbotResponseChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4>감정 분석 결과 분포</h4>
+                </div>
+                <div class="card-body">
+                    <canvas id="sentimentDistributionChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 챗봇 응답 시간 차트
+        const chatbotCtx = document.getElementById('chatbotResponseChart').getContext('2d');
+        const chatbotLabels = {{ chatbot_labels | tojson }};
+        const chatbotValues = {{ chatbot_values | tojson }};
+
+        new Chart(chatbotCtx, {
+            type: 'line',
+            data: {
+                labels: chatbotLabels,
+                datasets: [{
+                    label: '응답 시간 (초)',
+                    data: chatbotValues,
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: '시간 (초)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: '시점'
+                        }
+                    }
+                }
+            }
+        });
+
+        // 감정 분석 결과 분포 차트
+        const sentimentCtx = document.getElementById('sentimentDistributionChart').getContext('2d');
+        const sentimentLabels = {{ sentiment_labels | tojson }};
+        const sentimentValues = {{ sentiment_values | tojson }};
+
+        new Chart(sentimentCtx, {
+            type: 'pie',
+            data: {
+                labels: sentimentLabels,
+                datasets: [{
+                    label: '감정 분석 분포',
+                    data: sentimentValues,
+                    backgroundColor: [
+                        'rgb(54, 162, 235)', // Positive
+                        'rgb(255, 99, 132)', // Negative
+                        'rgb(201, 203, 207)' // Neutral
+                    ],
+                    hoverOffset: 4
+                }]
+            }
+        });
+    });
+</script>
+{% endblock %}
