@@ -1,7 +1,7 @@
 # pybo/rag_chat/routes.py
 from flask import Blueprint, render_template, request, url_for, redirect, flash
 from .pipeline import ask_rag, run_llm_chain, analyze_sentiment
-from .upload_utils import save_pdf_and_index, list_uploaded_pdfs, query_by_pdf, get_pdf_retriever, get_collection_names
+from .upload_utils import save_pdf_and_index, list_uploaded_pdfs, get_pdf_retriever, get_collection_names
 from .metrics import get_chatbot_metrics, get_sentiment_metrics
 
 bp = Blueprint("rag_chat", __name__, url_prefix="/chat")

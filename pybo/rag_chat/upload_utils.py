@@ -54,20 +54,6 @@ def get_pdf_retriever(filename:str, k: int=3):
     print(f"[-RAG-] get_pdf_retriever() for file: {filepath}, k={k}")
     return retriever_vectordb.as_retriever(search_kwargs={"k": k, "filter": {"source": filepath}})
 
-# 단일 PDF 파일을 쿼리하는 함수
-def query_by_pdf(filename):
-    filepath = os.path.join(upload_folder, filename)
-    loader = PyPDFLoader(filepath)
-    pages = loader.load_and_split()
-
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    docs = splitter.split_documents(pages)
-
-    local_vectordb = get_vectordb().from_documents(docs, embedding_model)
-    print(f"[-RAG-] query_by_pdf() indexed {len(docs)} chunks from {filepath}")
-    # 로컬 벡터 저장소를 검색 가능하게 설정
-    return local_vectordb.as_retriever(search_kwargs={"k": 3})
-
 # chromaDB 컬렉션 이름 목록을 반환하는 함수
 def get_collection_names() -> List[str]:
     """ChromaDB 컬렉션 이름 목록을 반환합니다."""
