@@ -1,6 +1,7 @@
 # pybo/rag_chat/pipeline.py
 import os
 import time
+import hashlib
 from dotenv import load_dotenv
 from flask import current_app
 from langchain.chains import LLMChain, RetrievalQA
@@ -25,6 +26,21 @@ llm = None
 qa_chain = None
 sentiment_chain = None
 
+# 파일별 컬렉션을 저장하는 딕셔너리
+file_collections = {}
+
+# 파일명을 기반으로 컬렉션 이름을 생성하는 함수
+def generate_collection_name(filename: str) -> str:
+    """파일명을 기반으로 안전한 컬렉션 이름을 생성합니다."""
+    # 파일 확장자 제거
+    base_name = os.path.splitext(filename)[0]
+    # 특수문자를 언더스코어로 변경
+    safe_name = "".join(c if c.isalnum() or c in '-_' else '_' for c in base_name)
+    # 파일명 해시를 추가하여 중복 방지
+    file_hash = hashlib.md5(filename.encode()).hexdigest()[:8]
+    collection_name = f"file_{safe_name}_{file_hash}"
+    return collection_name[:50]  # ChromaDB 컬렉션명 길이 제한
+
 # 임베딩 모델을 가져오는 함수
 def get_embedding_model():
     global embedding_model
@@ -48,7 +64,7 @@ def get_vectordb():
     return vectordb
 
 # LLM을 가져오는 함수
-def get_llm():
+def _get_llm():
     global llm
     if llm is None:
         llm = Ollama(
@@ -73,7 +89,7 @@ def get_qa_chain(retriever):
         )
 
         qa_chain = RetrievalQA.from_chain_type(
-            llm=get_llm(),
+            llm=_get_llm(),
             retriever=retriever,
             return_source_documents=False,
             chain_type_kwargs={"prompt": custom_prompt}
@@ -105,7 +121,7 @@ def get_sentiment_chain():
         )
 
         sentiment_chain = LLMChain(
-            llm=get_llm(),
+            llm=_get_llm(),
             prompt=sentiment_prompt
         )
     print(f"[-RAG-] get_sentiment_chain() initialized with LLM: {current_app.config['LLM_MODEL']}")
@@ -212,3 +228,66 @@ def analyze_sentiment(gender: str, age: str, emotion: str, meaning: str, action:
     log_sentiment_result(sentiment_class)
 
     return response
+
+# 벡터 데이터베이스 생성을 위한 내부 함수, 2025-08-19 jylee
+def _create_vectordb_instance(docs=None, collection_name=None):
+    """벡터 데이터베이스 인스턴스를 생성하는 내부 함수"""
+    if docs is not None:
+        # 문서로부터 새로운 vectordb 생성
+        return Chroma.from_documents(
+            documents=docs,
+            embedding=get_embedding_model(),
+            persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
+            collection_name=collection_name
+        )
+    else:
+        # 기존 컬렉션 로드
+        return Chroma(
+            embedding_function=get_embedding_model(),
+            persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
+            collection_name=collection_name
+        )
+
+# 파일별 벡터 데이터베이스를 생성하는 함수, 2025-08-19 jylee
+def create_file_vectordb(filename: str, docs):
+    """특정 파일에 대한 개별 벡터DB 컬렉션을 생성합니다."""
+    collection_name = generate_collection_name(filename)
+
+    # 내부 함수를 사용하여 vectordb 생성
+    vectordb = _create_vectordb_instance(docs=docs, collection_name=collection_name)
+
+    # 파일 컬렉션 딕셔너리에 저장
+    file_collections[filename] = {
+        'vectordb': vectordb,
+        'collection_name': collection_name
+    }
+
+    print(f"[-RAG-] Created collection '{collection_name}' for file: {filename}")
+    return vectordb
+
+# 파일별 벡터DB를 가져오는 함수
+def get_file_vectordb(filename: str):
+    """특정 파일의 벡터DB를 반환합니다."""
+    if filename in file_collections:
+        return file_collections[filename]['vectordb']
+
+    # 기존 컬렉션이 있는지 확인
+    collection_name = generate_collection_name(filename)
+    try:
+        # 내부 함수를 사용하여 기존 컬렉션 로드 (docs=None이므로 기존 컬렉션만 로드)
+        vectordb_instance = _create_vectordb_instance(docs=None, collection_name=collection_name)
+
+        file_collections[filename] = {
+            'vectordb': vectordb_instance,
+            'collection_name': collection_name
+        }
+
+        print(f"[-RAG-] Loaded existing collection '{collection_name}' for file: {filename}")
+        return vectordb_instance
+    except Exception as e:
+        print(f"[-RAG-] Error loading collection for {filename}: {e}")
+        return None
+
+# 모든 파일 컬렉션 목록을 반환하는 함수
+def get_all_file_collections():
+    return file_collections

@@ -1,7 +1,10 @@
 # pybo/rag_chat/routes.py
-from flask import Blueprint, render_template, request, url_for, redirect, flash
+from flask import Blueprint, render_template, request, url_for, redirect, flash, jsonify
 from .pipeline import ask_rag, run_llm_chain, analyze_sentiment
-from .upload_utils import save_pdf_and_index, list_uploaded_pdfs, get_pdf_retriever, get_collection_names
+from .upload_utils import (
+    save_pdf_and_index, list_uploaded_pdfs, get_pdf_retriever, 
+    get_collection_names, get_file_collection_info, delete_file_collection
+)
 from .metrics import get_chatbot_metrics, get_sentiment_metrics
 
 bp = Blueprint("rag_chat", __name__, url_prefix="/chat")
@@ -18,8 +21,11 @@ def index():
         selected_file = request.form.get("filename")
         if question and selected_file:
             retriever = get_pdf_retriever(selected_file)
-            answer = run_llm_chain(question, retriever)
-            print(f"[-RAG-] Answer generated for question: {question} using file: {selected_file}")
+            if retriever:
+                answer = run_llm_chain(question, retriever)
+                print(f"[-RAG-] Answer generated for question: {question} using file: {selected_file}")
+            else:
+                flash(f"파일 '{selected_file}'의 컬렉션을 찾을 수 없습니다.")
         elif question:
             answer = ask_rag(question)
             print(f"[-RAG-] [no file] Answer generated for question: {question} without file")
@@ -34,9 +40,11 @@ def index():
 @bp.route("/files", methods=['GET', 'POST'])
 def manage_files():
     files = list_uploaded_pdfs()
-
+    collection_info = get_file_collection_info()
     collection_names = get_collection_names()
+    
     print(f"[-RAG-] Available collections: {collection_names}")
+    print(f"[-RAG-] File collection info: {collection_info}")
 
     if request.method == 'POST':
         # 파일 업로드 요청 처리
@@ -50,14 +58,54 @@ def manage_files():
             return redirect(request.url)
 
         if file and file.filename.endswith('.pdf'):
-            save_pdf_and_index(file)
-            flash("PDF 파일이 성공적으로 업로드되었습니다.")
-            return redirect(url_for('rag_chat.manage_files'))
+            try:
+                chunk_count = save_pdf_and_index(file)
+                flash(f"PDF 파일이 성공적으로 업로드되었습니다. ({chunk_count}개 청크 생성)")
+                return redirect(url_for('rag_chat.manage_files'))
+            except Exception as e:
+                flash(f"파일 업로드 중 오류가 발생했습니다: {str(e)}")
+                return redirect(url_for('rag_chat.manage_files'))
         else:
             flash("PDF 파일만 업로드할 수 있습니다.")
             return redirect(url_for('rag_chat.manage_files'))
 
-    return render_template('rag_chat/manage_files.html', files=files)
+    return render_template('rag_chat/manage_files.html', 
+                         files=files, 
+                         collection_info=collection_info,
+                         collection_names=collection_names)
+
+# 파일 컬렉션 삭제 라우트
+@bp.route("/files/delete/<filename>", methods=['POST'])
+def delete_file(filename):
+    """특정 파일의 컬렉션을 삭제합니다."""
+    try:
+        if delete_file_collection(filename):
+            flash(f"파일 '{filename}'의 컬렉션이 삭제되었습니다.")
+        else:
+            flash(f"파일 '{filename}'의 컬렉션 삭제에 실패했습니다.")
+    except Exception as e:
+        flash(f"삭제 중 오류가 발생했습니다: {str(e)}")
+    
+    return redirect(url_for('rag_chat.manage_files'))
+
+# 컬렉션 정보 API
+@bp.route("/api/collections")
+def api_collections():
+    """컬렉션 정보를 JSON으로 반환합니다."""
+    try:
+        collection_info = get_file_collection_info()
+        collection_names = get_collection_names()
+        
+        return jsonify({
+            'status': 'success',
+            'file_collections': collection_info,
+            'all_collections': collection_names
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 # 2025-08-11 감정분석
 @bp.route("/sentiment", methods=['GET','POST'])

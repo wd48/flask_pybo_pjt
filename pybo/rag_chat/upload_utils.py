@@ -3,7 +3,11 @@ from flask import current_app
 from typing import List
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pybo.rag_chat.pipeline import embedding_model, vectordb, get_vectordb
+from pybo.rag_chat.pipeline import (
+    embedding_model, vectordb, get_vectordb,
+    create_file_vectordb, get_file_vectordb,
+    get_all_file_collections, generate_collection_name
+)
 
 # ChromaDB와 관련된 라이브러리 임포트
 import chromadb
@@ -20,19 +24,25 @@ def save_pdf(file_storage) -> str:
     print(f"[-RAG-] save_pdf() result: {filepath}")
     return filepath
 
-# 저장된 pdf를 인덱싱한다 (임베딩 및 벡터DB에 저장)
-# 2) index_pdf : PDF 파일을 로드하고, 텍스트를 분할한 후 벡터DB에 저장합니다.
+# 저장된 pdf를 개별 컬렉션으로 인덱싱한다 (임베딩 및 벡터DB에 저장)
+# 2) index_pdf : PDF 파일을 로드하고, 텍스트를 분할한 후 파일별 벡터DB에 저장합니다.
 def index_pdf(filepath: str, chunk_size: int=500, chunk_overlap: int=50) -> int:
+    filename = os.path.basename(filepath)
     loader = PyPDFLoader(filepath)
     pages = loader.load_and_split()
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     docs = splitter.split_documents(pages)
-    # 각 문서에 소스 정보 추가
-    pdf_vectordb = get_vectordb()
 
-    pdf_vectordb.add_documents(docs)
-    print(f"[-RAG-] index_pdf() indexed {len(docs)} chunks from {filepath}")
+    # 각 문서에 소스 정보 추가
+    for doc in docs:
+        doc.metadata["source"] = filepath
+        doc.metadata["filename"] = filename
+
+    # 파일별 개별 컬렉션 생성
+    create_file_vectordb(filename, docs)
+
+    print(f"[-RAG-] index_pdf() indexed {len(docs)} chunks from {filepath} into collection '{generate_collection_name(filename)}'")
     return len(docs)
 
 # 3) 저장 + 인덱싱 헬퍼 : 추가된 청크 수 반환
@@ -47,12 +57,16 @@ def list_uploaded_pdfs() -> List[str]:
     print(f"[-RAG-] list_uploaded_pdfs() in folder: {upload_folder}")
     return sorted([f for f in os.listdir(upload_folder) if f.endswith('.pdf')])
 
-# 5) 특정 pdf에만 한정된 retriever 생성
-def get_pdf_retriever(filename:str, k: int=3):
-    filepath = os.path.join(upload_folder, filename)
-    retriever_vectordb = get_vectordb()
-    print(f"[-RAG-] get_pdf_retriever() for file: {filepath}, k={k}")
-    return retriever_vectordb.as_retriever(search_kwargs={"k": k, "filter": {"source": filepath}})
+# 5) 특정 pdf에만 한정된 retriever 생성 (개별 컬렉션에서)
+def get_pdf_retriever(filename: str, k: int=3):
+    """특정 파일의 개별 컬렉션에서 retriever를 생성합니다."""
+    file_vectordb = get_file_vectordb(filename)
+    if file_vectordb is None:
+        print(f"[-RAG-] get_pdf_retriever() - No collection found for file: {filename}")
+        return None
+
+    print(f"[-RAG-] get_pdf_retriever() for file: {filename}, k={k}")
+    return file_vectordb.as_retriever(search_kwargs={"k": k})
 
 # chromaDB 컬렉션 이름 목록을 반환하는 함수
 def get_collection_names() -> List[str]:
@@ -60,7 +74,41 @@ def get_collection_names() -> List[str]:
     try:
         persistent_client = chromadb.PersistentClient(CHAT_DB_PERSIST_DIR)
         collections = persistent_client.list_collections()
-        return [c.name for c in collections]
+        collection_names = [c.name for c in collections]
+        print(f"[-RAG-] Found {len(collection_names)} collections: {collection_names}")
+        return collection_names
     except Exception as e:
         print(f"[-RAG-] Error getting collection names: {e}")
         return []
+
+# 파일별 컬렉션 정보를 반환하는 함수
+def get_file_collection_info() -> dict:
+    """파일별 컬렉션 정보를 반환합니다."""
+    file_collections = get_all_file_collections()
+    info = {}
+
+    for filename, collection_data in file_collections.items():
+        info[filename] = {
+            'collection_name': collection_data['collection_name'],
+            'document_count': collection_data['vectordb']._collection.count() if hasattr(collection_data['vectordb'], '_collection') else 0
+        }
+
+    return info
+
+# 특정 파일의 컬렉션을 삭제하는 함수
+def delete_file_collection(filename: str) -> bool:
+    """특정 파일의 컬렉션을 삭제합니다."""
+    try:
+        collection_name = generate_collection_name(filename)
+        persistent_client = chromadb.PersistentClient(CHAT_DB_PERSIST_DIR)
+        persistent_client.delete_collection(collection_name)
+
+        # 메모리에서도 제거
+        if filename in get_all_file_collections():
+            del get_all_file_collections()[filename]
+
+        print(f"[-RAG-] Deleted collection '{collection_name}' for file: {filename}")
+        return True
+    except Exception as e:
+        print(f"[-RAG-] Error deleting collection for {filename}: {e}")
+        return False
