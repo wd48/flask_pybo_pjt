@@ -1,9 +1,12 @@
 # pybo/rag_chat/routes.py
+import chromadb
 from flask import Blueprint, render_template, request, url_for, redirect, flash, jsonify
+
+from config import CHAT_DB_PERSIST_DIR
 from .pipeline import ask_rag, run_llm_chain, analyze_sentiment
 from .upload_utils import (
     save_pdf_and_index, list_uploaded_pdfs, get_pdf_retriever, 
-    get_collection_names, get_file_collection_info, delete_file_collection
+    get_collection_names, get_file_collection_info, delete_collection_and_file
 )
 from .metrics import get_chatbot_metrics, get_sentiment_metrics
 
@@ -15,7 +18,8 @@ def index():
     answer = ""
     selected_file = ""
     files = list_uploaded_pdfs()
-    
+    collection_info = get_file_collection_info()
+
     if request.method == "POST":
         question = request.form.get("question")
         selected_file = request.form.get("filename")
@@ -32,13 +36,18 @@ def index():
         else:
             flash("파일과 질문을 모두 입력하세요")
 
-    return render_template("rag_chat/chat.html", answer=answer, files=files, selected_file=selected_file)
+    return render_template("rag_chat/chat.html", 
+                           answer=answer, 
+                           files=files, 
+                           selected_file=selected_file,
+                           collection_info=collection_info)
 
 # 2025-08-07 PDF 파일 목록 라우트
 # 2025-08-13 파일 업로드 및 검색 기능 통합
 # 파일 업로드 및 검색 기능을 제공하는 라우트
 @bp.route("/files", methods=['GET', 'POST'])
 def manage_files():
+    """파일 업로드 및 컬렉션 관리 페이지"""
     files = list_uploaded_pdfs()
     collection_info = get_file_collection_info()
     collection_names = get_collection_names()
@@ -77,16 +86,47 @@ def manage_files():
 # 파일 컬렉션 삭제 라우트
 @bp.route("/files/delete/<filename>", methods=['POST'])
 def delete_file(filename):
-    """특정 파일의 컬렉션을 삭제합니다."""
+    """특정 파일의 컬렉션과 물리적 파일을 삭제합니다."""
     try:
-        if delete_file_collection(filename):
-            flash(f"파일 '{filename}'의 컬렉션이 삭제되었습니다.")
+        if delete_collection_and_file(filename):
+            flash(f"'{filename}' 파일 및 관련 데이터가 성공적으로 삭제되었습니다.")
         else:
-            flash(f"파일 '{filename}'의 컬렉션 삭제에 실패했습니다.")
+            flash(f"'{filename}' 파일 또는 관련 데이터 삭제에 실패했습니다. 로그를 확인해주세요.")
     except Exception as e:
         flash(f"삭제 중 오류가 발생했습니다: {str(e)}")
     
     return redirect(url_for('rag_chat.manage_files'))
+
+# DB 설정 페이지
+@bp.route('/settings')
+def settings():
+    """DB 관리 페이지"""
+    collections_info = []
+    try:
+        persistent_client = chromadb.PersistentClient(CHAT_DB_PERSIST_DIR)
+        collections = persistent_client.list_collections()
+        for collection in collections:
+            collections_info.append({
+                "name": collection.name,
+                "count": collection.count()
+            })
+    except Exception as e:
+        flash(f"컬렉션 정보를 가져오는 중 오류가 발생했습니다: {e}")
+    
+    return render_template('rag_chat/settings.html', collections=collections_info)
+
+@bp.route('/settings/delete/<collection_name>', methods=['POST'])
+def delete_setting_collection(collection_name):
+    """DB 관리 페이지에서 컬렉션을 삭제합니다."""
+    try:
+        persistent_client = chromadb.PersistentClient(CHAT_DB_PERSIST_DIR)
+        persistent_client.delete_collection(name=collection_name)
+        flash(f"컬렉션 '{collection_name}'이(가) 삭제되었습니다.")
+    except Exception as e:
+        flash(f"컬렉션 삭제 중 오류가 발생했습니다: {str(e)}")
+    
+    return redirect(url_for('rag_chat.settings'))
+
 
 # 컬렉션 정보 API
 @bp.route("/api/collections")
@@ -109,7 +149,8 @@ def api_collections():
 
 # 2025-08-11 감정분석
 @bp.route("/sentiment", methods=['GET','POST'])
-def sentiment():
+def sentiment_analysis():
+    """감정 분석 페이지"""
     result = None
     if request.method == "POST":
         gender = request.form.get('gender')
@@ -137,7 +178,8 @@ def sentiment():
 
 # 2025-08-18 성능 시각화 페이지 라우트
 @bp.route("/performance")
-def performance():
+def performance_dashboard():
+    """성능 대시보드 페이지"""
     chatbot_data = get_chatbot_metrics()
     sentiment_data = get_sentiment_metrics()
 

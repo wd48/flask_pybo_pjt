@@ -23,11 +23,20 @@ model_path = os.getenv("DATA_FILE_PATH")
 embedding_model = None
 vectordb = None
 llm = None
-qa_chain = None
+# qa_chain은 retriever에 따라 동적으로 생성되므로 전역 변수에서 제거
 sentiment_chain = None
 
 # 파일별 컬렉션을 저장하는 딕셔너리
 file_collections = {}
+
+def init_models():
+    """Pre-loads the embedding model and LLM into memory to improve initial response time."""
+    print("[-RAG-] Initializing models...")
+    get_embedding_model()
+    _get_llm()
+    print("[-RAG-] Models initialized successfully.")
+
+
 
 # 파일명을 기반으로 컬렉션 이름을 생성하는 함수
 def generate_collection_name(filename: str) -> str:
@@ -76,25 +85,27 @@ def _get_llm():
 
 # RAG(검색 증강 생성) 체인을 가져오는 함수
 def get_qa_chain(retriever):
-    global qa_chain
-    if qa_chain is None:
-        # 프롬프트 템플릿
-        custom_prompt = PromptTemplate(
-            input_variables=["context", "question"],
-            template="""
-                {context}
-                Question: {question}
-                Answer:
-            """
-        )
+    """RAG 체인을 생성합니다. retriever가 동적으로 변경되므로 체인을 캐시하지 않습니다."""
+    # 프롬프트 템플릿
+    custom_prompt = PromptTemplate(
+        input_variables=["context", "question"],
+        template="""
+            주어진 내용을 바탕으로 다음 질문에 대해 한국어로 답변해 주세요.
+            ---
+            {context}
+            ---
+            Question: {question}
+            Answer:
+        """
+    )
 
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=_get_llm(),
-            retriever=retriever,
-            return_source_documents=False,
-            chain_type_kwargs={"prompt": custom_prompt}
-        )
-    print(f"[-RAG-] get_qa_chain() initialized with LLM: {current_app.config['LLM_MODEL']}")
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=_get_llm(),
+        retriever=retriever,
+        return_source_documents=False,
+        chain_type_kwargs={"prompt": custom_prompt}
+    )
+    print(f"[-RAG-] QA chain created with LLM: {current_app.config['LLM_MODEL']}")
     return qa_chain
 
 # 감정 분석 체인을 가져오는 함수

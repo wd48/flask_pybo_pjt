@@ -1,7 +1,6 @@
 from flask import Flask
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
-from flask_mail import Mail
 from sqlalchemy import MetaData
 from flask_mail import Mail
 
@@ -29,13 +28,10 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(config)
 
-    # LLM 모델 로드를 애플리케이션 컨텍스트 내에서 실행
+    # RAG 파이프라인 모델 사전 로딩
     with app.app_context():
-        try:
-            from .rag_chat.chat.chatbot import load_llm
-            load_llm(app.config['LLM_MODEL'])  # LLM 모델 로드
-        except ImportError:
-            pass  # chatbot 모듈이 없으면 무시
+        from .rag_chat import pipeline
+        pipeline.init_models()
 
     # ORM
     db.init_app(app)

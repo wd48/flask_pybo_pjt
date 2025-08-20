@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2>⚙️ DB 설정</h2>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <div class="mt-3 alert alert-info">
+        {% for message in messages %}
+          <div>{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <div class="card">
+    <div class="card-header">
+        <h4>📚 전체 컬렉션 목록</h4>
+        <small class="text-muted">데이터베이스에 저장된 모든 벡터 컬렉션입니다. 파일과 연결되지 않은 컬렉션이 존재할 수 있습니다.</small>
+    </div>
+    <div class="card-body">
+      {% if collections %}
+        <div class="table-responsive">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>컬렉션명</th>
+                <th>문서 청크 수</th>
+                <th>작업</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for collection in collections %}
+                <tr>
+                  <td><small class="text-muted">{{ collection.name }}</small></td>
+                  <td><span class="badge bg-primary">{{ collection.count }}개</span></td>
+                  <td>
+                    <form method="post" action="{{ url_for('rag_chat.delete_setting_collection', collection_name=collection.name) }}" style="display: inline;">
+                      <button type="submit" class="btn btn-sm btn-danger"
+                              onclick="return confirm('정말로 \'{{ collection.name }}\' 컬렉션을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')">
+                        <i class="fas fa-trash"></i> 삭제
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-center text-muted py-4">
+          <p>표시할 컬렉션이 없습니다.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
