@@ -1,4 +1,4 @@
-<!-- templates/rag_chat/manage_files.html -->
+<!-- templates/rag/manage_files.html -->
 {% extends "base.html" %}
 {% block content %}
 <div class="container mt-4">
@@ -68,7 +68,7 @@
                     {% endif %}
                   </td>
                   <td>
-                    <form method="post" action="{{ url_for('rag_chat.delete_file', filename=file) }}" style="display: inline;">
+                    <form method="post" action="{{ url_for('rag.delete_file', filename=file) }}" style="display: inline;">
                       <button type="submit" class="btn btn-sm btn-danger"
                               onclick="return confirm('정말로 이 파일의 컬렉션을 삭제하시겠습니까?')">
                         <i class="fas fa-trash"></i> 삭제
@@ -121,7 +121,7 @@
 <script>
 // 컬렉션 정보를 주기적으로 업데이트하는 함수 (선택사항)
 function updateCollectionInfo() {
-    fetch('{{ url_for("rag_chat.api_collections") }}')
+    fetch('{{ url_for("rag.api_collections") }}')
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success') {

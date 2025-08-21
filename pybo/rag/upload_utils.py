@@ -3,7 +3,7 @@ from flask import current_app
 from typing import List, LiteralString
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pybo.rag_chat.pipeline import (
+from pybo.rag.pipeline import (
     create_file_vectordb, get_file_vectordb,
     get_all_file_collections, generate_collection_name
 )

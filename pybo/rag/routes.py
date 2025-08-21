@@ -1,4 +1,4 @@
-# pybo/rag_chat/routes.py
+# pybo/rag/routes.py
 import chromadb
 from flask import Blueprint, render_template, request, url_for, redirect, flash, jsonify
 
@@ -10,7 +10,7 @@ from .upload_utils import (
 )
 from .metrics import get_chatbot_metrics, get_sentiment_metrics
 
-bp = Blueprint("rag_chat", __name__, url_prefix="/chat")
+bp = Blueprint("rag", __name__, url_prefix="/chat")
 
 # ====== 라우팅 ======
 @bp.route("/", methods=["GET", "POST"])
@@ -36,9 +36,9 @@ def index():
         else:
             flash("파일과 질문을 모두 입력하세요")
 
-    return render_template("rag_chat/chat.html", 
-                           answer=answer, 
-                           files=files, 
+    return render_template("rag/chat.html",
+                           answer=answer,
+                           files=files,
                            selected_file=selected_file,
                            collection_info=collection_info)
 
@@ -70,18 +70,18 @@ def manage_files():
             try:
                 chunk_count = save_pdf_and_index(file)
                 flash(f"PDF 파일이 성공적으로 업로드되었습니다. ({chunk_count}개 청크 생성)")
-                return redirect(url_for('rag_chat.manage_files'))
+                return redirect(url_for('rag.manage_files'))
             except Exception as e:
                 flash(f"파일 업로드 중 오류가 발생했습니다: {str(e)}")
-                return redirect(url_for('rag_chat.manage_files'))
+                return redirect(url_for('rag.manage_files'))
         else:
             flash("PDF 파일만 업로드할 수 있습니다.")
-            return redirect(url_for('rag_chat.manage_files'))
+            return redirect(url_for('rag.manage_files'))
 
-    return render_template('rag_chat/manage_files.html', 
-                         files=files, 
-                         collection_info=collection_info,
-                         collection_names=collection_names)
+    return render_template('rag/manage_files.html',
+                           files=files,
+                           collection_info=collection_info,
+                           collection_names=collection_names)
 
 # 파일 컬렉션 삭제 라우트
 @bp.route("/files/delete/<filename>", methods=['POST'])
@@ -95,7 +95,7 @@ def delete_file(filename):
     except Exception as e:
         flash(f"삭제 중 오류가 발생했습니다: {str(e)}")
     
-    return redirect(url_for('rag_chat.manage_files'))
+    return redirect(url_for('rag.manage_files'))
 
 # DB 설정 페이지
 @bp.route('/settings')
@@ -113,7 +113,7 @@ def settings():
     except Exception as e:
         flash(f"컬렉션 정보를 가져오는 중 오류가 발생했습니다: {e}")
     
-    return render_template('rag_chat/settings.html', collections=collections_info)
+    return render_template('rag/settings.html', collections=collections_info)
 
 @bp.route('/settings/delete/<collection_name>', methods=['POST'])
 def delete_setting_collection(collection_name):
@@ -125,7 +125,7 @@ def delete_setting_collection(collection_name):
     except Exception as e:
         flash(f"컬렉션 삭제 중 오류가 발생했습니다: {str(e)}")
     
-    return redirect(url_for('rag_chat.settings'))
+    return redirect(url_for('rag.settings'))
 
 
 # 컬렉션 정보 API
@@ -173,7 +173,7 @@ def sentiment_analysis():
             anchor=anchor
         )
 
-    return render_template("rag_chat/sentiment.html", result=result)
+    return render_template("rag/sentiment.html", result=result)
 
 
 # 2025-08-18 성능 시각화 페이지 라우트
@@ -191,7 +191,7 @@ def performance_dashboard():
     sentiment_values = list(sentiment_data.values())
 
     return render_template(
-        "rag_chat/performance.html",
+        "rag/performance.html",
         chatbot_labels=chatbot_labels,
         chatbot_values=chatbot_values,
         sentiment_labels=sentiment_labels,

@@ -1,4 +1,4 @@
-# pybo/rag_chat/metrics.py
+# pybo/rag/metrics.py
 from collections import defaultdict
 import time
 from datetime import datetime

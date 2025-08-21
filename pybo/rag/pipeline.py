@@ -1,4 +1,4 @@
-# pybo/rag_chat/pipeline.py
+# pybo/rag/pipeline.py
 import os
 import time
 import hashlib
@@ -8,9 +8,9 @@ from langchain.chains import LLMChain, RetrievalQA
 from langchain.prompts import PromptTemplate
 from langchain_chroma import Chroma
 from langchain_community.document_loaders import TextLoader
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.llms import Ollama
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from . import models
 from .metrics import log_chatbot_response_time, log_sentiment_result
 
 # 환경변수 로드
@@ -20,22 +20,12 @@ load_dotenv()
 model_path = os.getenv("DATA_FILE_PATH")
 
 # 전역 변수들을 None으로 초기화
-embedding_model = None
 vectordb = None
-llm = None
 # qa_chain은 retriever에 따라 동적으로 생성되므로 전역 변수에서 제거
 sentiment_chain = None
 
 # 파일별 컬렉션을 저장하는 딕셔너리
 file_collections = {}
-
-def init_models():
-    """Pre-loads the embedding model and LLM into memory to improve initial response time."""
-    print("[-RAG-] Initializing models...")
-    get_embedding_model()
-    _get_llm()
-    print("[-RAG-] Models initialized successfully.")
-
 
 
 # 파일명을 기반으로 컬렉션 이름을 생성하는 함수
@@ -50,38 +40,17 @@ def generate_collection_name(filename: str) -> str:
     collection_name = f"file_{safe_name}_{file_hash}"
     return collection_name[:50]  # ChromaDB 컬렉션명 길이 제한
 
-# 임베딩 모델을 가져오는 함수
-def get_embedding_model():
-    global embedding_model
-    if embedding_model is None:
-        print(f"[-RAG-] None get_embedding_model(), model_name: {current_app.config['EMBEDDING_MODEL']}")
-        embedding_model = HuggingFaceEmbeddings(
-            model_name=current_app.config["EMBEDDING_MODEL"]
-        )
-    print(f"[-RAG-] get_embedding_model() initialized with model: {current_app.config['EMBEDDING_MODEL']}")
-    return embedding_model
 
 # 벡터 데이터베이스를 가져오는 함수
 def get_vectordb():
     global vectordb
     if vectordb is None:
         vectordb = Chroma(
-            embedding_function=get_embedding_model(),
+            embedding_function=models.get_embedding_model(),
             persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"]
         )
     print(f"[-RAG-] get_vectordb() initialized with collection: {vectordb._collection_name}")
     return vectordb
-
-# LLM을 가져오는 함수
-def _get_llm():
-    global llm
-    if llm is None:
-        llm = Ollama(
-            model=current_app.config["LLM_MODEL"],
-            temperature=current_app.config["LLM_TEMPERATURE"]
-        )
-    print(f"[-RAG-] get_llm() initialized with model: {current_app.config['LLM_MODEL']}")
-    return llm
 
 # RAG(검색 증강 생성) 체인을 가져오는 함수
 def get_qa_chain(retriever):
@@ -100,7 +69,7 @@ def get_qa_chain(retriever):
     )
 
     qa_chain = RetrievalQA.from_chain_type(
-        llm=_get_llm(),
+        llm=models.get_llm(),
         retriever=retriever,
         return_source_documents=False,
         chain_type_kwargs={"prompt": custom_prompt}
@@ -132,7 +101,7 @@ def get_sentiment_chain():
         )
 
         sentiment_chain = LLMChain(
-            llm=_get_llm(),
+            llm=models.get_llm(),
             prompt=sentiment_prompt
         )
     print(f"[-RAG-] get_sentiment_chain() initialized with LLM: {current_app.config['LLM_MODEL']}")
@@ -154,7 +123,7 @@ def load_and_split_documents(file_path: str):
 def initialize_chroma(docs, persist_dir="./chroma_db"):
     vectordb = Chroma.from_documents(
         documents=docs,
-        embedding=embedding_model,
+        embedding=models.get_embedding_model(),
         persist_directory=persist_dir
     )
     print(f"[-RAG-] Chroma DB initialized with {len(docs)} documents.")
@@ -247,14 +216,14 @@ def _create_vectordb_instance(docs=None, collection_name=None):
         # 문서로부터 새로운 vectordb 생성
         return Chroma.from_documents(
             documents=docs,
-            embedding=get_embedding_model(),
+            embedding=models.get_embedding_model(),
             persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
             collection_name=collection_name
         )
     else:
         # 기존 컬렉션 로드
         return Chroma(
-            embedding_function=get_embedding_model(),
+            embedding_function=models.get_embedding_model(),
             persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
             collection_name=collection_name
         )

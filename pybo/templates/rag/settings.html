@@ -34,7 +34,7 @@
                   <td><small class="text-muted">{{ collection.name }}</small></td>
                   <td><span class="badge bg-primary">{{ collection.count }}개</span></td>
                   <td>
-                    <form method="post" action="{{ url_for('rag_chat.delete_setting_collection', collection_name=collection.name) }}" style="display: inline;">
+                    <form method="post" action="{{ url_for('rag.delete_setting_collection', collection_name=collection.name) }}" style="display: inline;">
                       <button type="submit" class="btn btn-sm btn-danger"
                               onclick="return confirm('정말로 \'{{ collection.name }}\' 컬렉션을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')">
                         <i class="fas fa-trash"></i> 삭제

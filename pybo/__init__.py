@@ -30,8 +30,8 @@ def create_app():
 
     # RAG 파이프라인 모델 사전 로딩
     with app.app_context():
-        from .rag_chat import pipeline
-        pipeline.init_models()
+        from .rag import models
+        models.init_models()
 
     # ORM
     db.init_app(app)
@@ -58,7 +58,7 @@ def create_app():
     app.jinja_env.filters['datetime'] = format_datetime
 
     # 2025-07-29, RAG 챗봇 기능을 위한 블루프린트 등록
-    from .rag_chat import bp as rag_chat_bp
+    from .rag import bp as rag_chat_bp
     app.register_blueprint(rag_chat_bp)
 
     # 마크다운 확장 - 현재 주석 처리됨
