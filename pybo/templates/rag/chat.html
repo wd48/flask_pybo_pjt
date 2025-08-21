@@ -1,75 +1,126 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container mt-5">
-    <h3>📚 한글 RAG 챗봇</h3>
-    <form method="post">
-        <div class="mb-3">
-            <label for="filename" class="form-label">PDF 선택</label>
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>💬 RAG 챗봇 (대화형)</h3>
+        <form action="{{ url_for('rag.clear_chat') }}" method="post">
+            <button type="submit" class="btn btn-secondary btn-sm">대화 초기화</button>
+        </form>
+    </div>
+
+    <div id="chat-container" class="chat-container mb-3">
+        {% for message in chat_history %}
+            <div class="chat-message {{ 'user-message' if message.role == 'user' else 'bot-message' }}">
+                {% if message.role == 'bot' and ('답변 생성 중...' in message.content or 'spinner' in message.content) %}
+                    <div class="spinner"></div>
+                {% else %}
+                    {{ message.content|safe }}
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+
+    
+
+    <form id="chat-form" class="chat-form mt-3">
+        <div class="mb-3 me-2">
             <select name="filename" id="file-select" class="form-select">
-                <option value="">-- 전체 문서에서 질문하기 --</option>
+                <option value="">-- 전체 문서 --</option>
                 {% for file in files %}
-                    <option value="{{ file }}" {% if file == selected_file %}selected{% endif %}>
-                        {{ file }}
-                    </option>
+                    <option value="{{ file }}" {% if file == selected_file %}selected{% endif %}>{{ file }}</option>
                 {% endfor %}
             </select>
         </div>
-
-        <div id="collection-name-display" class="mb-3" style="display: none;">
-            <label class="form-label">컬렉션 이름:</label>
-            <span id="collection-name-text" class="form-control-plaintext" style="background-color: #f0f0f0; padding: 5px; border-radius: 4px;"></span>
-        </div>
-
-        <div class="form-group">
-            <label>질문:</label>
-            <input type="text" class="form-control" name="question" required>
-        </div>
-        <button type="submit" class="btn btn-primary mt-2">질문하기</button>
+        <input type="text" name="question" class="form-control" placeholder="질문을 입력하세요..." required>
+        <button type="submit" class="btn btn-primary">전송</button>
     </form>
-
-    {% if answer %}
-    <div class="mt-4 p-3 border rounded bg-light">
-        <strong>답변:</strong>
-        <div id="answer-content" style="padding: 1em; border-radius: 0.5em;">{{ answer|safe }}</div>
-    </div>
-    {% endif %}
 </div>
 {% endblock %}
+
 {% block script %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // 마크다운 답변 렌더링
-    {% if answer %}
-    const answerContent = document.getElementById('answer-content');
-    if (answerContent) {
-        const markdown = `{{ answer|replace('\n', '\\n')|replace('"', '\"') }}`;
-        answerContent.innerHTML = SimpleMDE.prototype.markdown(markdown);
-    }
-    {% endif %}
-
-    // 컬렉션 이름 표시 로직
+    const chatContainer = document.getElementById('chat-container');
+    const chatForm = document.getElementById('chat-form');
+    const questionInput = chatForm.querySelector('input[name="question"]');
     const fileSelect = document.getElementById('file-select');
-    const collectionNameDisplay = document.getElementById('collection-name-display');
-    const collectionNameText = document.getElementById('collection-name-text');
-    const collectionInfo = {{ collection_info|tojson|safe }};
 
-    if (fileSelect) {
-        fileSelect.addEventListener('change', function() {
-            const selectedFilename = this.value;
-            if (selectedFilename && collectionInfo[selectedFilename]) {
-                const collectionName = collectionInfo[selectedFilename].collection_name;
-                collectionNameText.textContent = collectionName;
-                collectionNameDisplay.style.display = 'block';
+    // 페이지 로드 시 채팅창을 맨 아래로 스크롤
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+    // 기존 메시지 마크다운 렌더링
+    document.querySelectorAll('.bot-message').forEach(function(element) {
+        if (!element.querySelector('.spinner')) {
+            const rawMarkdown = element.innerHTML;
+            element.innerHTML = SimpleMDE.prototype.markdown(rawMarkdown.trim());
+        }
+    });
+
+    // 파일 선택 시 페이지 새로고침
+    fileSelect.addEventListener('change', function() {
+        const selectedFilename = this.value;
+        // URL을 만들고 페이지를 리디렉션합니다.
+        const url = new URL("{{ url_for('rag.index', _external=True) }}");
+        if (selectedFilename) {
+            url.searchParams.set('file', selectedFilename);
+        } else {
+            url.searchParams.delete('file');
+        }
+        window.location.href = url.toString();
+    });
+
+    // 챗봇 질문 폼 제출
+    chatForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(chatForm);
+        const question = formData.get('question');
+        if (!question.trim()) return;
+
+        // 사용자 메시지 UI 추가
+        const userMessageDiv = document.createElement('div');
+        userMessageDiv.className = 'chat-message user-message';
+        userMessageDiv.textContent = question;
+        chatContainer.appendChild(userMessageDiv);
+        questionInput.value = '';
+
+        // 로딩 스피너 UI 추가
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'chat-message bot-message';
+        loadingDiv.innerHTML = '<div class="spinner"></div>';
+        chatContainer.appendChild(loadingDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+
+        // 서버에 질문 전송
+        fetch("{{ url_for('rag.ask') }}", {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            chatContainer.removeChild(loadingDiv); // 로딩 스피너 제거
+            const botMessageDiv = document.createElement('div');
+            botMessageDiv.className = 'chat-message bot-message';
+            if (data.answer) {
+                botMessageDiv.innerHTML = SimpleMDE.prototype.markdown(data.answer);
             } else {
-                collectionNameText.textContent = '';
-                collectionNameDisplay.style.display = 'none';
+                botMessageDiv.textContent = data.error || '오류가 발생했습니다.';
             }
+            chatContainer.appendChild(botMessageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            if(loadingDiv.parentNode === chatContainer) {
+                chatContainer.removeChild(loadingDiv);
+            }
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'chat-message bot-message';
+            errorDiv.textContent = '통신 중 오류가 발생했습니다.';
+            chatContainer.appendChild(errorDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
         });
-
-        // 페이지 로드 시 초기 선택된 파일에 대한 정보 표시
-        fileSelect.dispatchEvent(new Event('change'));
-    }
+    });
 });
 </script>
 {% endblock %}

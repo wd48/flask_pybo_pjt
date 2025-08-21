@@ -1,11 +1,13 @@
 # pybo/rag/routes.py
+import os
 import chromadb
-from flask import Blueprint, render_template, request, url_for, redirect, flash, jsonify
+from flask import Blueprint, render_template, request, url_for, redirect, flash, jsonify, session, current_app
+from langchain_community.document_loaders import PyPDFLoader
 
 from config import CHAT_DB_PERSIST_DIR
-from .pipeline import ask_rag, run_llm_chain, analyze_sentiment
+from .pipeline import ask_rag, run_llm_chain, analyze_sentiment, summarize_text
 from .upload_utils import (
-    save_pdf_and_index, list_uploaded_pdfs, get_pdf_retriever, 
+    save_pdf_and_index, list_uploaded_pdfs, get_pdf_retriever,
     get_collection_names, get_file_collection_info, delete_collection_and_file
 )
 from .metrics import get_chatbot_metrics, get_sentiment_metrics
@@ -13,34 +15,91 @@ from .metrics import get_chatbot_metrics, get_sentiment_metrics
 bp = Blueprint("rag", __name__, url_prefix="/chat")
 
 # ====== 라우팅 ======
-@bp.route("/", methods=["GET", "POST"])
+@bp.route("/", methods=["GET"])
 def index():
-    answer = ""
-    selected_file = ""
+    # 파일 선택 시 대화 기록 초기화
+    selected_file = request.args.get('file', default=None, type=str)
+    if selected_file is not None:
+        session['chat_history'] = []
+    
+    # 세션에서 채팅 기록 가져오기. 없으면 초기화.
+    if 'chat_history' not in session:
+        session['chat_history'] = []
+
     files = list_uploaded_pdfs()
     collection_info = get_file_collection_info()
 
-    if request.method == "POST":
-        question = request.form.get("question")
-        selected_file = request.form.get("filename")
-        if question and selected_file:
-            retriever = get_pdf_retriever(selected_file)
-            if retriever:
-                answer = run_llm_chain(question, retriever)
-                print(f"[-RAG-] Answer generated for question: {question} using file: {selected_file}")
-            else:
-                flash(f"파일 '{selected_file}'의 컬렉션을 찾을 수 없습니다.")
-        elif question:
-            answer = ask_rag(question)
-            print(f"[-RAG-] [no file] Answer generated for question: {question} without file")
-        else:
-            flash("파일과 질문을 모두 입력하세요")
-
     return render_template("rag/chat.html",
-                           answer=answer,
+                           chat_history=session['chat_history'],
                            files=files,
-                           selected_file=selected_file,
-                           collection_info=collection_info)
+                           collection_info=collection_info,
+                           selected_file=selected_file)  # 선택된 파일명을 템플릿에 전달
+
+# chat 페이지 fetch 요청 메소드, 2025-08-21 jylee
+@bp.route("/ask", methods=["POST"])
+def ask():
+    print("--- Received request at /ask endpoint ---")
+    print(f"Request Form Data: {request.form}")
+    question = request.form.get("question")
+    selected_file = request.form.get("filename")
+    print(f"Question: {question}, Selected File: {selected_file}")
+    
+    if not question:
+        return jsonify({"error": "질문을 입력하세요"}), 400
+
+    # 사용자 질문을 채팅 기록에 추가
+    session['chat_history'].append({"role": "user", "content": question})
+
+    answer = ""
+    if selected_file:
+        retriever = get_pdf_retriever(selected_file)
+        if retriever:
+            answer = run_llm_chain(question, retriever)
+            print(f"[-RAG-] Answer generated for question: {question} using file: {selected_file}")
+        else:
+            answer = f"파일 '{selected_file}'의 컬렉션을 찾을 수 없습니다."
+    else:
+        answer = ask_rag(question)
+        print(f"[-RAG-] [no file] Answer generated for question: {question} without file")
+
+    # 챗봇 답변을 채팅 기록에 추가
+    session['chat_history'].append({"role": "bot", "content": answer})
+    session.modified = True  # 세션이 변경되었음을 명시
+
+    return jsonify({"answer": answer})
+
+# 채팅 기록 초기화, 2025-08-21 jylee
+@bp.route("/clear", methods=["POST"])
+def clear_chat():
+    session.pop('chat_history', None)
+    return redirect(url_for('rag.index'))
+
+@bp.route("/summarize", methods=["POST"])
+def summarize():
+    filename = request.form.get("filename")
+    if not filename:
+        return jsonify({"error": "Filename is required."}),
+
+    try:
+        upload_folder = current_app.config["CHAT_UPLOAD_FOLDER"]
+        filepath = os.path.join(upload_folder, filename)
+
+        if not os.path.exists(filepath):
+            return jsonify({"error": "File not found."}),
+
+        loader = PyPDFLoader(filepath)
+        pages = loader.load()
+        full_text = "\n".join(page.page_content for page in pages)
+
+        if not full_text.strip():
+            return jsonify({"summary": "이 PDF 파일에서 텍스트를 추출할 수 없습니다."})
+
+        summary = summarize_text(full_text)
+        return jsonify({"summary": summary})
+
+    except Exception as e:
+        print(f"Error during summarization: {e}")
+        return jsonify({"error": "요약 생성 중 오류가 발생했습니다."}),
 
 # 2025-08-07 PDF 파일 목록 라우트
 # 2025-08-13 파일 업로드 및 검색 기능 통합

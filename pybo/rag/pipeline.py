@@ -271,3 +271,19 @@ def get_file_vectordb(filename: str):
 # 모든 파일 컬렉션 목록을 반환하는 함수
 def get_all_file_collections():
     return file_collections
+
+def summarize_text(text_to_summarize: str) -> str:
+    """
+    Summarizes the given text using the LLM.
+    """
+    prompt = PromptTemplate(
+        input_variables=["text_content"],
+        template="다음 텍스트를 3~5문장으로 요약해 주세요:\n\n---\n{text_content}\n\n---\n\n요약:"
+    )
+    
+    chain = LLMChain(llm=models.get_llm(), prompt=prompt)
+    
+    # Take the first 1500 characters for a brief summary
+    summary = chain.run(text_content=text_to_summarize[:1500])
+    print(f"[-RAG-] Generated summary for text.")
+    return summary

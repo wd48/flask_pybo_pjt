@@ -7,6 +7,7 @@ from langchain_community.llms import Ollama
 embedding_model = None
 llm = None
 
+# 임베딩 모델 호출, 2025-08-21 jylee
 def get_embedding_model():
     """임베딩 모델을 로드하고 반환합니다. 모델이 이미 로드된 경우 기존 객체를 반환합니다."""
     global embedding_model
@@ -17,6 +18,7 @@ def get_embedding_model():
         )
     return embedding_model
 
+# 거대 언어 모델 호출 (LLM), 2025-08-21 jylee
 def get_llm():
     """LLM을 로드하고 반환합니다. 모델이 이미 로드된 경우 기존 객체를 반환합니다."""
     global llm
