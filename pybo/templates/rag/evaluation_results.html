@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="mb-4">📊 답변 평가 결과 목록</h2>
+
+    <div class="accordion" id="evaluationAccordion">
+        {% for eval in evaluations %}
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="heading-{{ loop.index }}">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ loop.index }}" aria-expanded="false" aria-controls="collapse-{{ loop.index }}">
+                    <strong>{{ eval.filename }}</strong>&nbsp; ({{ eval.timestamp|truncate(19, True, '...') }})
+                </button>
+            </h2>
+            <div id="collapse-{{ loop.index }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ loop.index }}" data-bs-parent="#evaluationAccordion">
+                <div class="accordion-body">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">질문</h5>
+                            <p class="card-text">{{ eval.question }}</p>
+                            <hr>
+                            <h5 class="card-title">답변</h5>
+                            <p class="card-text">{{ eval.prediction }}</p>
+                            {% if eval.reference %}
+                            <hr>
+                            <h5 class="card-title">정답 (Reference)</h5>
+                            <p class="card-text">{{ eval.reference }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <h5 class="mt-4">평가 상세</h5>
+                    <table class="table table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th scope="col">항목</th>
+                                <th scope="col">점수</th>
+                                <th scope="col">평가 이유</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for key, value in eval.evaluation.items() %}
+                            <tr>
+                                <td><strong>{{ key|capitalize }}</strong></td>
+                                <td>
+                                    {% if value.score == 1 %}
+                                        <span class="badge bg-success">Good</span>
+                                    {% elif value.score == 0 %}
+                                        <span class="badge bg-danger">Bad</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ value.score }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ value.reasoning }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-warning" role="alert">
+            저장된 평가 결과가 없습니다.
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

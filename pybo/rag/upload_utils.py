@@ -1,6 +1,8 @@
 import os
 from flask import current_app
 from typing import List, LiteralString
+from datetime import datetime
+import uuid
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pybo.rag.pipeline import (
@@ -20,7 +22,19 @@ from config import CHAT_DB_PERSIST_DIR
 def save_pdf(file_storage) -> LiteralString | str | bytes:
     upload_folder = current_app.config["CHAT_UPLOAD_FOLDER"]
     os.makedirs(upload_folder, exist_ok=True)
-    filepath = os.path.join(upload_folder, file_storage.filename)
+
+    #파일경로 생성
+    original_filename = file_storage.filename
+    name, ext = os.path.splitext(original_filename)
+
+    # Generate a unique filename
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    random_string = uuid.uuid4().hex[:6] # Short random string
+
+    # Ensure the filename is unique
+    unique_filename = f"{name}_{timestamp}_{random_string}{ext}"
+    filepath = os.path.join(upload_folder, unique_filename)
+    
     file_storage.save(filepath)
     print(f"[-RAG-] save_pdf() result: {filepath}")
     return filepath

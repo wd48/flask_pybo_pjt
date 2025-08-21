@@ -1,5 +1,24 @@
 # pybo/rag/pipeline.py
+# ==============================================================================
+# LangSmith Evaluation & Tracing Setup
+# ==============================================================================
+# For advanced evaluation and tracing of your chatbot's performance, it is
+# highly recommended to use LangSmith.
+#
+# To enable LangSmith, you need to set the following environment variables.
+# You can do this by creating a .env file in the root of your project and
+# adding the lines below, or by setting them in your operating system.
+#
+# os.environ["LANGCHAIN_TRACING_V2"] = "true"
+# os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
+# os.environ["LANGCHAIN_API_KEY"] = "YOUR_LANGSMITH_API_KEY"
+# os.environ["LANGCHAIN_PROJECT"] = "YOUR_PROJECT_NAME" # e.g., "pybo-chatbot"
+#
+# Make sure you have the `langsmith` and `python-dotenv` packages installed:
+# pip install langsmith python-dotenv
+# ==============================================================================
 import os
+import re
 import time
 import hashlib
 from dotenv import load_dotenv
@@ -11,7 +30,7 @@ from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from . import models
-from .metrics import log_chatbot_response_time, log_sentiment_result
+from .metrics import log_chatbot_response_time
 
 # 환경변수 로드
 load_dotenv()
@@ -30,15 +49,43 @@ file_collections = {}
 
 # 파일명을 기반으로 컬렉션 이름을 생성하는 함수
 def generate_collection_name(filename: str) -> str:
-    """파일명을 기반으로 안전한 컬렉션 이름을 생성합니다."""
-    # 파일 확장자 제거
-    base_name = os.path.splitext(filename)[0]
-    # 특수문자를 언더스코어로 변경
-    safe_name = "".join(c if c.isalnum() or c in '-_' else '_' for c in base_name)
-    # 파일명 해시를 추가하여 중복 방지
+    """파일 이름으로부터 ChromaDB 컬렉션 이름을 생성합니다."""
+    base_name = os.path.splitext(filename)[0].lower()
+
+    # 1. 허용된 문자(a-z, 0-9, ., _, -)만 남기고 나머지는 밑줄로 대체
+    cleaned_name = re.sub(r'[^a-z0-9._-]+', '_', base_name)
+
+    # 2. 연속된 밑줄을 하나로 줄임
+    cleaned_name = re.sub(r'_+', '_', cleaned_name)
+
+    # 3. 이름의 시작과 끝이 [a-z0-9]가 되도록 처리
+    #    밑줄이나 하이픈으로 시작하거나 끝나는 경우 제거
+    cleaned_name = cleaned_name.strip('_- ') # Added space to strip
+
+    # 4. 이름이 비어있으면 'default'로 설정
+    if not cleaned_name:
+        cleaned_name = "default"
+
+    # 5. 최소 길이 3자 보장 (ChromaDB 요구사항)
+    if len(cleaned_name) < 3:
+        cleaned_name = "f" + cleaned_name # Prepend 'f' to ensure length and valid start
+
+    # 6. 시작 문자가 [a-z0-9]가 아니면 'f' 추가
+    if not cleaned_name[0].isalnum():
+        cleaned_name = 'f' + cleaned_name
+
+    # 7. 끝 문자가 [a-z0-9]가 아니면 'f' 추가
+    if not cleaned_name[-1].isalnum():
+        cleaned_name = cleaned_name + 'f'
+
+    # 8. 파일명 해시를 추가하여 중복 방지
     file_hash = hashlib.md5(filename.encode()).hexdigest()[:8]
-    collection_name = f"file_{safe_name}_{file_hash}"
-    return collection_name[:50]  # ChromaDB 컬렉션명 길이 제한
+    
+    # 최종 컬렉션 이름 생성
+    final_collection_name = f"file_{cleaned_name}_{file_hash}"
+
+    # 9. 최종 길이 제한 (ChromaDB max 512 chars)
+    return final_collection_name[:512]
 
 
 # 벡터 데이터베이스를 가져오는 함수
@@ -205,7 +252,7 @@ def analyze_sentiment(gender: str, age: str, emotion: str, meaning: str, action:
     # LLM이 분류한 감정 클래스를 직접 파싱하는 로직이 필요
     # LLM 응답을 파싱하여 실제 감정 분류를 추출해야 함
     # 이 부분은 LLM의 응답 형식을 보고 적절히 파싱하여 수정해야 합니다.
-    log_sentiment_result(sentiment_class)
+    # log_sentiment_result(sentiment_class)
 
     return response
 
@@ -272,6 +319,7 @@ def get_file_vectordb(filename: str):
 def get_all_file_collections():
     return file_collections
 
+# 텍스트 요약 함수, 2025-08-19 jylee
 def summarize_text(text_to_summarize: str) -> str:
     """
     Summarizes the given text using the LLM.

@@ -344,3 +344,31 @@ a.subject-link:hover { color: #d9534f !important; text-decoration: none; }
         transform: rotate(360deg);
     }
 }
+
+/* ------------------------------------------------------ */
+/* Chat UI mods for side-by-side layout */
+.chat-main-area {
+    display: flex;
+    gap: 20px;
+}
+
+.chat-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 70vh;
+}
+
+.chat-main-area .chat-container {
+    background: #ffffff;
+    flex-grow: 1;
+    /* Override original styles */
+    height: auto !important;
+    margin: 0 !important;
+    max-width: none !important;
+}
+
+.settings-column {
+    width: 250px;
+    flex-shrink: 0;
+}

@@ -116,9 +116,24 @@
             <div id="result-content" style="padding: 1em; border-radius: 0.5em;">{{ result|safe }}</div>
         </div>
     {% endif %}
+
+    <hr class="my-5">
+
+    <h3>성능 대시보드</h3>
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">챗봇 응답 시간</div>
+                <div class="card-body">
+                    <canvas id="chatbotPerformanceChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 {% block script %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     {% if result %}
     // 마크다운 결과 렌더링
@@ -126,10 +141,37 @@
         const resultContent = document.getElementById('result-content');
         if (resultContent) {
             // SimpleMDE의 마크다운 파서를 사용하여 결과를 HTML로 변환
-            const markdown = `{{ result|replace('\n', '\\n')|replace('"', '\\"') }}`;
+            const markdown = `{{ result|replace('\n', '\\n')|replace('"', '\"') }}`;
             resultContent.innerHTML = SimpleMDE.prototype.markdown(markdown);
         }
     });
     {% endif %}
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Chatbot Performance Chart
+        const chatbotCtx = document.getElementById('chatbotPerformanceChart');
+        if (chatbotCtx) {
+            new Chart(chatbotCtx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: {{ chatbot_labels|tojson }},
+                    datasets: [{
+                        label: '응답 시간 (초)',
+                        data: {{ chatbot_values|tojson }},
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        fill: true,
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+    });
 </script>
 {% endblock %}
