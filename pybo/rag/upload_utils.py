@@ -7,8 +7,9 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pybo.rag.vectorstore import (
     create_file_vectordb, get_file_vectordb,
-    get_all_file_collections, generate_collection_name
+    get_all_file_collections, generate_collection_name, get_persistent_client
 )
+from pybo.rag.models import (get_embedding_model)
 
 # ChromaDB와 관련된 라이브러리 임포트
 import chromadb
@@ -67,8 +68,15 @@ def index_pdf(filepath: str, chunk_size: int=500, chunk_overlap: int=50) -> int:
         doc.metadata["source"] = filepath
         doc.metadata["filename"] = filename
 
-    # 파일별 개별 컬렉션 생성
-    create_file_vectordb(filename, final_docs)
+    collection_name = generate_collection_name(filename)
+    collection = get_persistent_client().get_or_create_collection(name=collection_name,
+                                                                  embedding_function=get_embedding_model())
+
+    # 여기서 `documents` 파라미터의 각 요소를 명시적으로 문자열로 변환합니다.
+    collection.add(
+        ids=[f"doc_{i}" for i in range(len(final_docs))],
+        documents=[str(doc.page_content) for doc in final_docs],
+    )
 
     print(f"[-RAG-] index_pdf() indexed {len(final_docs)} chunks from {filepath} into collection '{generate_collection_name(filename)}'")
     return len(final_docs)
@@ -101,7 +109,10 @@ def get_pdf_retriever(filename: str, k: int=3):
 def get_collection_names() -> List[str]:
     """ChromaDB 컬렉션 이름 목록을 반환합니다."""
     try:
-        persistent_client = chromadb.PersistentClient(CHAT_DB_PERSIST_DIR)
+        persistent_client = get_persistent_client()
+        if not persistent_client:
+            raise Exception("PersistentClient 초기화에 실패했습니다.")
+
         collections = persistent_client.list_collections()
         collection_names = [c.name for c in collections]
         print(f"[-RAG-] Found {len(collection_names)} collections: {collection_names}")
@@ -113,7 +124,11 @@ def get_collection_names() -> List[str]:
 # 파일별 컬렉션 정보를 반환하는 함수
 def get_file_collection_info() -> dict:
     """파일별 컬렉션 정보를 반환합니다."""
-    persistent_client = chromadb.PersistentClient(current_app.config["CHAT_DB_PERSIST_DIR"])
+    persistent_client = get_persistent_client()
+    if not persistent_client:
+        print("[-RAG-] Persistent client not initialized. Cannot get file collection info.")
+        return {}
+
     info = {}
     
     # 실제 업로드된 파일 목록을 기준으로 순회
@@ -156,7 +171,10 @@ def delete_collection_and_file(filename: str) -> bool:
 
         # 2. ChromaDB 컬렉션 삭제
         collection_name = generate_collection_name(filename)
-        persistent_client = chromadb.PersistentClient(CHAT_DB_PERSIST_DIR)
+        persistent_client = get_persistent_client()
+        if not persistent_client:
+            raise Exception("PersistentClient 초기화에 실패했습니다.")
+
         try:
             persistent_client.delete_collection(name=collection_name)
             print(f"[-RAG-] Deleted collection '{collection_name}'")

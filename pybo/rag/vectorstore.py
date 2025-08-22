@@ -2,6 +2,8 @@
 import os
 import re
 import hashlib
+
+import chromadb
 from flask import current_app
 from langchain_chroma import Chroma
 
@@ -60,10 +62,15 @@ def generate_collection_name(filename: str) -> str:
     # 8. 파일명 해시를 추가하여 중복 방지
     file_hash = hashlib.md5(filename.encode()).hexdigest()[:8]
     
-    # 최종 컬렉션 이름 생성
+    # 9. 최종 컬렉션 이름 생성 전, cleaned_name의 길이를 적절히 제한
+    #    (예: 512 - len("file__") - len(file_hash) - 1 = 512 - 13 = 499자)
+    max_cleaned_name_len = 499 
+    if len(cleaned_name) > max_cleaned_name_len:
+        cleaned_name = cleaned_name[:max_cleaned_name_len]
+
     final_collection_name = f"file_{cleaned_name}_{file_hash}"
 
-    # 9. 최종 길이 제한 (ChromaDB max 512 chars)
+    # 10. 최종 길이 제한 (ChromaDB max 512 chars)
     return final_collection_name[:512]
 
 # 벡터 데이터베이스를 가져오는 함수 (모든 문서를 검색 대상으로 함)

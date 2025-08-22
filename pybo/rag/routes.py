@@ -14,6 +14,7 @@ from .upload_utils import (
 )
 from .metrics import get_chatbot_metrics
 from .models import get_llm
+from .vectorstore import get_persistent_client # get_persistent_client 임포트 추가
 
 bp = Blueprint("rag", __name__, url_prefix="/chat")
 
@@ -151,13 +152,14 @@ def delete_file(filename):
 def settings():
     collections_info = []
     try:
-        persistent_client = chromadb.PersistentClient(CHAT_DB_PERSIST_DIR)
-        collections = persistent_client.list_collections()
-        for collection in collections:
-            collections_info.append({
-                "name": collection.name,
-                "count": collection.count()
-            })
+        persistent_client = get_persistent_client()
+        if persistent_client:
+            collections = persistent_client.list_collections()
+            for collection in collections:
+                collections_info.append({
+                    "name": collection.name,
+                    "count": collection.count()
+                })
     except Exception as e:
         flash(f"컬렉션 정보를 가져오는 중 오류가 발생했습니다: {e}")
     
@@ -166,9 +168,10 @@ def settings():
 @bp.route('/settings/delete/<collection_name>', methods=['POST'])
 def delete_setting_collection(collection_name):
     try:
-        persistent_client = chromadb.PersistentClient(CHAT_DB_PERSIST_DIR)
-        persistent_client.delete_collection(name=collection_name)
-        flash(f"컬렉션 '{collection_name}'이(가) 삭제되었습니다.")
+        persistent_client = get_persistent_client()
+        if persistent_client:
+            persistent_client.delete_collection(name=collection_name)
+            flash(f"컬렉션 '{collection_name}'이(가) 삭제되었습니다.")
     except Exception as e:
         flash(f"컬렉션 삭제 중 오류가 발생했습니다: {str(e)}")
     
