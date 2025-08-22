@@ -1,0 +1,135 @@
+<!-- templates/rag/manage_files.html -->
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2>📂 문서 관리</h2>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="mt-3 alert alert-info">
+          {% for message in messages %}
+            <div>{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+  <div class="card mb-4">
+    <div class="card-header">
+        <h4>📄 PDF 문서 업로드</h4>
+    </div>
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label for="pdf_file" class="form-label">PDF 파일 선택</label>
+          <input type="file" class="form-control" name="pdf_file" accept=".pdf" required>
+        </div>
+        <button type="submit" class="btn btn-primary">업로드</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 업로드된 문서 목록 -->
+  <div class="card">
+    <div class="card-header">
+        <h4>📚 업로드된 문서 목록</h4>
+        <small class="text-muted">각 파일은 개별 컬렉션으로 관리됩니다</small>
+    </div>
+    <div class="card-body">
+      {% if files %}
+        <div class="table-responsive">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>파일명</th>
+                <th>컬렉션명</th>
+                <th>문서 수</th>
+                <th>작업</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for file in files %}
+                <tr>
+                  <td>
+                    <i class="fas fa-file-pdf text-danger"></i>
+                    {{ file }}
+                  </td>
+                  <td>
+                    {% if collection_info.get(file) %}
+                      <small class="text-muted">{{ collection_info[file]['collection_name'] }}</small>
+                    {% else %}
+                      <small class="text-warning">컬렉션 없음</small>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if collection_info.get(file) %}
+                      <span class="badge bg-primary">{{ collection_info[file]['document_count'] }}개</span>
+                    {% else %}
+                      <span class="badge bg-secondary">0개</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <form method="post" action="{{ url_for('rag.delete_file', filename=file) }}" style="display: inline;">
+                      <button type="submit" class="btn btn-sm btn-danger"
+                              onclick="return confirm('정말로 이 파일의 컬렉션을 삭제하시겠습니까?')">
+                        <i class="fas fa-trash"></i> 삭제
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="fas fa-folder-open fa-3x mb-3"></i>
+          <p>업로드된 문서가 없습니다.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- 컬렉션 정보 -->
+  {% if collection_names %}
+  <div class="card mt-4">
+    <div class="card-header">
+        <h4>🗄️ 전체 컬렉션 정보</h4>
+    </div>
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-6">
+          <h6>파일별 컬렉션: <span class="badge bg-success">{{ collection_info|length }}개</span></h6>
+        </div>
+        <div class="col-md-6">
+          <h6>전체 컬렉션: <span class="badge bg-info">{{ collection_names|length }}개</span></h6>
+        </div>
+      </div>
+      <details class="mt-3">
+        <summary class="btn btn-outline-secondary btn-sm">전체 컬렉션 목록 보기</summary>
+        <div class="mt-2">
+          {% for collection in collection_names %}
+            <span class="badge bg-light text-dark me-1 mb-1">{{ collection }}</span>
+          {% endfor %}
+        </div>
+      </details>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+// 컬렉션 정보를 주기적으로 업데이트하는 함수 (선택사항)
+function updateCollectionInfo() {
+    fetch('{{ url_for("rag.api_collections") }}')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                console.log('Collection info updated:', data);
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}
+</script>
+
+{% endblock %}

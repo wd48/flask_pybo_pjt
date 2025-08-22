@@ -1,7 +1,6 @@
 from flask import Flask
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
-from flask_mail import Mail
 from sqlalchemy import MetaData
 from flask_mail import Mail
 
@@ -29,13 +28,10 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(config)
 
-    # LLM 모델 로드를 애플리케이션 컨텍스트 내에서 실행
+    # RAG 파이프라인 모델 사전 로딩
     with app.app_context():
-        try:
-            from .rag_chat.chat.chatbot import load_llm
-            load_llm(app.config['LLM_MODEL'])  # LLM 모델 로드
-        except ImportError:
-            pass  # chatbot 모듈이 없으면 무시
+        from .rag import models
+        models.init_models()
 
     # ORM
     db.init_app(app)
@@ -62,7 +58,7 @@ def create_app():
     app.jinja_env.filters['datetime'] = format_datetime
 
     # 2025-07-29, RAG 챗봇 기능을 위한 블루프린트 등록
-    from .rag_chat import bp as rag_chat_bp
+    from .rag import bp as rag_chat_bp
     app.register_blueprint(rag_chat_bp)
 
     # 마크다운 확장 - 현재 주석 처리됨

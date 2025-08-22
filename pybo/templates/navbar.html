@@ -14,13 +14,19 @@
             {% if g.user %}
             <ul class="navbar-nav">
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('rag_chat.index') }}">챗봇</a>
+                    <a class="nav-link" href="{{ url_for('rag.index') }}">챗봇</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('rag_chat.sentiment') }}">감성분석</a>
+                    <a class="nav-link" href="{{ url_for('rag.sentiment_analysis') }}">감성분석</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('rag_chat.upload_pdf') }}">pdf 업로드</a>
+                    <a class="nav-link" href="{{ url_for('rag.manage_files') }}">문서 관리</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('rag.performance_dashboard') }}">성능 분석</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('rag.evaluation_results') }}">평가 결과</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('auth.change_password') }}">비밀번호 변경</a>
@@ -32,16 +38,19 @@
             {% else %}
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('rag_chat.index') }}">챗봇</a>
+                    <a class="nav-link" href="{{ url_for('rag.index') }}">챗봇</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('rag_chat.sentiment') }}">감성분석</a>
+                    <a class="nav-link" href="{{ url_for('rag.sentiment_analysis') }}">감성분석</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('rag_chat.upload_pdf') }}">문서 업로드</a>
+                    <a class="nav-link" href="{{ url_for('rag.manage_files') }}">문서 관리</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('rag_chat.file_list') }}">업로드 목록</a>
+                    <a class="nav-link" href="{{ url_for('rag.performance_dashboard') }}">성능 분석</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('rag.evaluation_results') }}">평가 결과</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('auth.signup') }}">계정생성</a>

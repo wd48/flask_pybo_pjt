@@ -264,3 +264,111 @@ a.subject-link:hover { color: #d9534f !important; text-decoration: none; }
 	font-weight:bold;
 	margin-bottom:5px;
 }
+
+/* ------------------------------------------------------ */
+/* Chat UI */
+.chat-container {
+    max-width: 800px;
+    margin: auto;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    height: 60vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+.chat-message {
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    max-width: 80%;
+    line-height: 1.4;
+}
+.user-message {
+    background-color: #dcf8c6;
+    align-self: flex-end;
+    text-align: right;
+}
+.bot-message {
+    background-color: #f1f0f0;
+    align-self: flex-start;
+}
+.chat-form {
+    display: flex;
+    margin-top: 20px;
+}
+.chat-form input {
+    flex-grow: 1;
+    margin-right: 10px;
+}
+.loading {
+    text-align: center;
+    color: #888;
+}
+
+/* For file summary */
+.summary-box {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 5px;
+    padding: 15px;
+    margin-top: 15px;
+    display: none; /* Initially hidden */
+}
+.summary-box h5 {
+    margin-top: 0;
+    font-size: 1rem;
+    font-weight: bold;
+}
+.summary-content {
+    font-size: 0.9rem;
+    color: #495057;
+}
+
+/* For loading spinner */
+.spinner {
+    margin: auto; /* To center in the chat message box */
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border-left-color: #0d6efd; /* Bootstrap primary color */
+    animation: spin 1s ease infinite;
+}
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* ------------------------------------------------------ */
+/* Chat UI mods for side-by-side layout */
+.chat-main-area {
+    display: flex;
+    gap: 20px;
+}
+
+.chat-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 70vh;
+}
+
+.chat-main-area .chat-container {
+    background: #ffffff;
+    flex-grow: 1;
+    /* Override original styles */
+    height: auto !important;
+    margin: 0 !important;
+    max-width: none !important;
+}
+
+.settings-column {
+    width: 250px;
+    flex-shrink: 0;
+}

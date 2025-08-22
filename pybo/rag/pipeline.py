@@ -1,0 +1,337 @@
+# pybo/rag/pipeline.py
+# ==============================================================================
+# LangSmith Evaluation & Tracing Setup
+# ==============================================================================
+# For advanced evaluation and tracing of your chatbot's performance, it is
+# highly recommended to use LangSmith.
+#
+# To enable LangSmith, you need to set the following environment variables.
+# You can do this by creating a .env file in the root of your project and
+# adding the lines below, or by setting them in your operating system.
+#
+# os.environ["LANGCHAIN_TRACING_V2"] = "true"
+# os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
+# os.environ["LANGCHAIN_API_KEY"] = "YOUR_LANGSMITH_API_KEY"
+# os.environ["LANGCHAIN_PROJECT"] = "YOUR_PROJECT_NAME" # e.g., "pybo-chatbot"
+#
+# Make sure you have the `langsmith` and `python-dotenv` packages installed:
+# pip install langsmith python-dotenv
+# ==============================================================================
+import os
+import re
+import time
+import hashlib
+from dotenv import load_dotenv
+from flask import current_app
+from langchain.chains import LLMChain, RetrievalQA
+from langchain.prompts import PromptTemplate
+from langchain_chroma import Chroma
+from langchain_community.document_loaders import TextLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from . import models
+from .metrics import log_chatbot_response_time
+
+# 환경변수 로드
+load_dotenv()
+
+#### 공통자원 초기화 ####
+model_path = os.getenv("DATA_FILE_PATH")
+
+# 전역 변수들을 None으로 초기화
+vectordb = None
+# qa_chain은 retriever에 따라 동적으로 생성되므로 전역 변수에서 제거
+sentiment_chain = None
+
+# 파일별 컬렉션을 저장하는 딕셔너리
+file_collections = {}
+
+
+# 파일명을 기반으로 컬렉션 이름을 생성하는 함수
+def generate_collection_name(filename: str) -> str:
+    """파일 이름으로부터 ChromaDB 컬렉션 이름을 생성합니다."""
+    base_name = os.path.splitext(filename)[0].lower()
+
+    # 1. 허용된 문자(a-z, 0-9, ., _, -)만 남기고 나머지는 밑줄로 대체
+    cleaned_name = re.sub(r'[^a-z0-9._-]+', '_', base_name)
+
+    # 2. 연속된 밑줄을 하나로 줄임
+    cleaned_name = re.sub(r'_+', '_', cleaned_name)
+
+    # 3. 이름의 시작과 끝이 [a-z0-9]가 되도록 처리
+    #    밑줄이나 하이픈으로 시작하거나 끝나는 경우 제거
+    cleaned_name = cleaned_name.strip('_- ') # Added space to strip
+
+    # 4. 이름이 비어있으면 'default'로 설정
+    if not cleaned_name:
+        cleaned_name = "default"
+
+    # 5. 최소 길이 3자 보장 (ChromaDB 요구사항)
+    if len(cleaned_name) < 3:
+        cleaned_name = "f" + cleaned_name # Prepend 'f' to ensure length and valid start
+
+    # 6. 시작 문자가 [a-z0-9]가 아니면 'f' 추가
+    if not cleaned_name[0].isalnum():
+        cleaned_name = 'f' + cleaned_name
+
+    # 7. 끝 문자가 [a-z0-9]가 아니면 'f' 추가
+    if not cleaned_name[-1].isalnum():
+        cleaned_name = cleaned_name + 'f'
+
+    # 8. 파일명 해시를 추가하여 중복 방지
+    file_hash = hashlib.md5(filename.encode()).hexdigest()[:8]
+    
+    # 최종 컬렉션 이름 생성
+    final_collection_name = f"file_{cleaned_name}_{file_hash}"
+
+    # 9. 최종 길이 제한 (ChromaDB max 512 chars)
+    return final_collection_name[:512]
+
+
+# 벡터 데이터베이스를 가져오는 함수
+def get_vectordb():
+    global vectordb
+    if vectordb is None:
+        vectordb = Chroma(
+            embedding_function=models.get_embedding_model(),
+            persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"]
+        )
+    print(f"[-RAG-] get_vectordb() initialized with collection: {vectordb._collection_name}")
+    return vectordb
+
+# RAG(검색 증강 생성) 체인을 가져오는 함수
+def get_qa_chain(retriever):
+    """RAG 체인을 생성합니다. retriever가 동적으로 변경되므로 체인을 캐시하지 않습니다."""
+    # 프롬프트 템플릿
+    custom_prompt = PromptTemplate(
+        input_variables=["context", "question"],
+        template="""
+            주어진 내용을 바탕으로 다음 질문에 대해 한국어로 답변해 주세요.
+            ---
+            {context}
+            ---
+            Question: {question}
+            Answer:
+        """
+    )
+
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=models.get_llm(),
+        retriever=retriever,
+        return_source_documents=False,
+        chain_type_kwargs={"prompt": custom_prompt}
+    )
+    print(f"[-RAG-] QA chain created with LLM: {current_app.config['LLM_MODEL']}")
+    return qa_chain
+
+# 감정 분석 체인을 가져오는 함수
+def get_sentiment_chain():
+    global sentiment_chain
+    if sentiment_chain is None:
+        sentiment_prompt = PromptTemplate(
+            input_variables=["gender", "age", "emotion", "meaning", "action", "reflect", "anchor"],
+            template="""
+                당신은 사용자의 감정 기록을 분석하는 전문 상담가입니다. 사용자의 다음 기록을 바탕으로 감정 상태를 진단하고, 행동이 어떤 의미를 가지는지 분석하여 정확하고 적절한 답변을 제공하세요.
+
+                --- 감정 기록 ---
+                성별: {gender}
+                연령대: {age}
+                걷기 전 감정: {emotion}
+                감정을 느낀 이유: {meaning}
+                도움이 된 행동: {action}
+                행동 후 긍정적인 변화: {reflect}
+                오늘의 한마디: {anchor}
+                ---
+
+                위 기록을 바탕으로 분석하고 답변해 주세요.
+            """
+        )
+
+        sentiment_chain = LLMChain(
+            llm=models.get_llm(),
+            prompt=sentiment_prompt
+        )
+    print(f"[-RAG-] get_sentiment_chain() initialized with LLM: {current_app.config['LLM_MODEL']}")
+    return sentiment_chain
+
+# 2025-08-06 문서 로딩 및 분할
+# 텍스트 파일 로딩 후 500자 단위로 나눈다
+def load_and_split_documents(file_path: str):
+    loader = TextLoader(file_path, encoding="utf-8")
+    docs = loader.load()
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500,
+        chunk_overlap=100
+    )
+    print(f"[-RAG-] load_and_split_documents() loaded {len(docs)} documents from {file_path}")
+    return splitter.split_documents(docs)
+
+# 2025-08-06 Chroma 벡터 저장소 초기화
+def initialize_chroma(docs, persist_dir="./chroma_db"):
+    vectordb = Chroma.from_documents(
+        documents=docs,
+        embedding=models.get_embedding_model(),
+        persist_directory=persist_dir
+    )
+    print(f"[-RAG-] Chroma DB initialized with {len(docs)} documents.")
+    return vectordb
+
+# 전역 검색 함수 : 사용자가 입력한 질문에 대해 RAG(검색 증강 생성) 방식으로 답변을 생성하는 함수
+def ask_rag(query: str):
+    retriever = get_vectordb().as_retriever(search_kwargs={"k": 3})
+    chain = get_qa_chain(retriever)
+    result = chain.invoke(query)
+
+    # 결과에서 'Answer:' 부분을 추출하여 반환
+    if isinstance(result, dict) and 'result' in result:
+        answer_text = result['result']
+        print(f"[-RAG-] ask_rag() answer_text: {answer_text}")
+
+        if 'Answer:' in answer_text:
+            print(f"[-RAG-] ask_rag() found 'Answer:' in result")
+            # return answer_text.split('Answer:')[1].strip()
+        elif 'context:' in answer_text:
+            print(f"[-RAG-] ask_rag() found 'context:' in result")
+            lines = answer_text.split('\n')
+            answer_lines = []
+            skip_context = False
+            for line in lines:
+                if line.strip().startswith('context:'):
+                    skip_context = True
+                    continue
+                if skip_context and line.strip() == '':
+                    continue
+                if not skip_context:
+                    answer_lines.append(line)
+            answer_text = '\n'.join(answer_lines)
+            print(f"[-RAG-] ask_rag() cleaned answer_text: {answer_text}")
+        return answer_text.strip()
+    print(f"[-RAG-] ask_rag() unexpected result format: {result}")
+    return result
+
+# 2025-08-07 업로드 파일에 대한 질의 실행 함수 (LLM 호출)
+# 특정 retriever를 사용하여 질문에 대한 답변을 생성하는 함수 : retriever는 PDF 파일에 대한 검색 기능을 제공
+def run_llm_chain(query, retriever):
+    chain = get_qa_chain(retriever)
+    start_time = time.time()
+    result = chain.invoke({"query": query})
+    end_time = time.time()
+    log_chatbot_response_time(end_time - start_time)
+    print(f"[-RAG-] run_llm_chain() result: {result}")
+    return result["result"]
+
+# 2025-08-11 감정 분석 함수 : 주어진 텍스트에 대해 감정 분석을 수행하는 함수
+def analyze_sentiment(gender: str, age: str, emotion: str, meaning: str, action: str, reflect: str, anchor: str):
+    chain = get_sentiment_chain()
+    print(f"[-RAG-] analyze_sentiment() for emotional record")
+
+    start_time = time.time()
+    response = chain.run(
+        gender=gender,
+        age=age,
+        emotion=emotion,
+        meaning=meaning,
+        action=action,
+        reflect=reflect,
+        anchor=anchor
+    )
+    end_time = time.time()
+    log_chatbot_response_time(end_time - start_time)
+
+    # LLM 응답을 파싱하여 감정 분류를 추출
+    sentiment_class = "분류불가"
+    if "긍정(Positive)" in response:
+        sentiment_class = "긍정(Positive)"
+    elif "부정(Negative)" in response:
+        sentiment_class = "부정(Negative)"
+    elif "중립(Neutral)" in response:
+        sentiment_class = "중립(Neutral)"
+
+    # 결과에서 감정 분류를 추출하여 로그
+    # 예시로 'Positive', 'Negative', 'Neutral' 중 하나로 가정
+    # LLM이 분류한 감정 클래스를 직접 파싱하는 로직이 필요
+    # LLM 응답을 파싱하여 실제 감정 분류를 추출해야 함
+    # 이 부분은 LLM의 응답 형식을 보고 적절히 파싱하여 수정해야 합니다.
+    # log_sentiment_result(sentiment_class)
+
+    return response
+
+# 벡터 데이터베이스 생성을 위한 내부 함수, 2025-08-19 jylee
+def _create_vectordb_instance(docs=None, collection_name=None):
+    """벡터 데이터베이스 인스턴스를 생성하는 내부 함수"""
+    if docs is not None:
+        # 문서로부터 새로운 vectordb 생성
+        return Chroma.from_documents(
+            documents=docs,
+            embedding=models.get_embedding_model(),
+            persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
+            collection_name=collection_name
+        )
+    else:
+        # 기존 컬렉션 로드
+        return Chroma(
+            embedding_function=models.get_embedding_model(),
+            persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
+            collection_name=collection_name
+        )
+
+# 파일별 벡터 데이터베이스를 생성하는 함수, 2025-08-19 jylee
+def create_file_vectordb(filename: str, docs):
+    """특정 파일에 대한 개별 벡터DB 컬렉션을 생성합니다."""
+    collection_name = generate_collection_name(filename)
+
+    # 내부 함수를 사용하여 vectordb 생성
+    vectordb = _create_vectordb_instance(docs=docs, collection_name=collection_name)
+
+    # 파일 컬렉션 딕셔너리에 저장
+    file_collections[filename] = {
+        'vectordb': vectordb,
+        'collection_name': collection_name
+    }
+
+    print(f"[-RAG-] Created collection '{collection_name}' for file: {filename}")
+    return vectordb
+
+# 파일별 벡터DB를 가져오는 함수
+def get_file_vectordb(filename: str):
+    """특정 파일의 벡터DB를 반환합니다."""
+    if filename in file_collections:
+        return file_collections[filename]['vectordb']
+
+    # 기존 컬렉션이 있는지 확인
+    collection_name = generate_collection_name(filename)
+    try:
+        # 내부 함수를 사용하여 기존 컬렉션 로드 (docs=None이므로 기존 컬렉션만 로드)
+        vectordb_instance = _create_vectordb_instance(docs=None, collection_name=collection_name)
+
+        file_collections[filename] = {
+            'vectordb': vectordb_instance,
+            'collection_name': collection_name
+        }
+
+        print(f"[-RAG-] Loaded existing collection '{collection_name}' for file: {filename}")
+        return vectordb_instance
+    except Exception as e:
+        print(f"[-RAG-] Error loading collection for {filename}: {e}")
+        return None
+
+# 모든 파일 컬렉션 목록을 반환하는 함수
+def get_all_file_collections():
+    return file_collections
+
+# 텍스트 요약 함수, 2025-08-19 jylee
+def summarize_text(text_to_summarize: str) -> str:
+    """
+    Summarizes the given text using the LLM.
+    """
+    prompt = PromptTemplate(
+        input_variables=["text_content"],
+        template="다음 텍스트를 3~5문장으로 요약해 주세요:\n\n---\n{text_content}\n\n---\n\n요약:"
+    )
+    
+    chain = LLMChain(llm=models.get_llm(), prompt=prompt)
+    
+    # Take the first 1500 characters for a brief summary
+    summary = chain.run(text_content=text_to_summarize[:1500])
+    print(f"[-RAG-] Generated summary for text.")
+    return summary
