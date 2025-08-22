@@ -118,18 +118,4 @@
 
 </div>
 
-<script>
-// 컬렉션 정보를 주기적으로 업데이트하는 함수 (선택사항)
-function updateCollectionInfo() {
-    fetch('{{ url_for("rag.api_collections") }}')
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
-                console.log('Collection info updated:', data);
-            }
-        })
-        .catch(error => console.error('Error:', error));
-}
-</script>
-
 {% endblock %}

@@ -18,18 +18,15 @@
 # pip install langsmith python-dotenv
 # ==============================================================================
 import os
-import re
 import time
-import hashlib
 from dotenv import load_dotenv
 from flask import current_app
 from langchain.chains import LLMChain, RetrievalQA
 from langchain.prompts import PromptTemplate
-from langchain_chroma import Chroma
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from . import models
+from . import models, vectorstore
 from .metrics import log_chatbot_response_time
 
 # 환경변수 로드
@@ -39,65 +36,7 @@ load_dotenv()
 model_path = os.getenv("DATA_FILE_PATH")
 
 # 전역 변수들을 None으로 초기화
-vectordb = None
-# qa_chain은 retriever에 따라 동적으로 생성되므로 전역 변수에서 제거
 sentiment_chain = None
-
-# 파일별 컬렉션을 저장하는 딕셔너리
-file_collections = {}
-
-
-# 파일명을 기반으로 컬렉션 이름을 생성하는 함수
-def generate_collection_name(filename: str) -> str:
-    """파일 이름으로부터 ChromaDB 컬렉션 이름을 생성합니다."""
-    base_name = os.path.splitext(filename)[0].lower()
-
-    # 1. 허용된 문자(a-z, 0-9, ., _, -)만 남기고 나머지는 밑줄로 대체
-    cleaned_name = re.sub(r'[^a-z0-9._-]+', '_', base_name)
-
-    # 2. 연속된 밑줄을 하나로 줄임
-    cleaned_name = re.sub(r'_+', '_', cleaned_name)
-
-    # 3. 이름의 시작과 끝이 [a-z0-9]가 되도록 처리
-    #    밑줄이나 하이픈으로 시작하거나 끝나는 경우 제거
-    cleaned_name = cleaned_name.strip('_- ') # Added space to strip
-
-    # 4. 이름이 비어있으면 'default'로 설정
-    if not cleaned_name:
-        cleaned_name = "default"
-
-    # 5. 최소 길이 3자 보장 (ChromaDB 요구사항)
-    if len(cleaned_name) < 3:
-        cleaned_name = "f" + cleaned_name # Prepend 'f' to ensure length and valid start
-
-    # 6. 시작 문자가 [a-z0-9]가 아니면 'f' 추가
-    if not cleaned_name[0].isalnum():
-        cleaned_name = 'f' + cleaned_name
-
-    # 7. 끝 문자가 [a-z0-9]가 아니면 'f' 추가
-    if not cleaned_name[-1].isalnum():
-        cleaned_name = cleaned_name + 'f'
-
-    # 8. 파일명 해시를 추가하여 중복 방지
-    file_hash = hashlib.md5(filename.encode()).hexdigest()[:8]
-    
-    # 최종 컬렉션 이름 생성
-    final_collection_name = f"file_{cleaned_name}_{file_hash}"
-
-    # 9. 최종 길이 제한 (ChromaDB max 512 chars)
-    return final_collection_name[:512]
-
-
-# 벡터 데이터베이스를 가져오는 함수
-def get_vectordb():
-    global vectordb
-    if vectordb is None:
-        vectordb = Chroma(
-            embedding_function=models.get_embedding_model(),
-            persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"]
-        )
-    print(f"[-RAG-] get_vectordb() initialized with collection: {vectordb._collection_name}")
-    return vectordb
 
 # RAG(검색 증강 생성) 체인을 가져오는 함수
 def get_qa_chain(retriever):
@@ -166,19 +105,19 @@ def load_and_split_documents(file_path: str):
     print(f"[-RAG-] load_and_split_documents() loaded {len(docs)} documents from {file_path}")
     return splitter.split_documents(docs)
 
-# 2025-08-06 Chroma 벡터 저장소 초기화
-def initialize_chroma(docs, persist_dir="./chroma_db"):
-    vectordb = Chroma.from_documents(
-        documents=docs,
-        embedding=models.get_embedding_model(),
-        persist_directory=persist_dir
-    )
-    print(f"[-RAG-] Chroma DB initialized with {len(docs)} documents.")
-    return vectordb
-
 # 전역 검색 함수 : 사용자가 입력한 질문에 대해 RAG(검색 증강 생성) 방식으로 답변을 생성하는 함수
 def ask_rag(query: str):
-    retriever = get_vectordb().as_retriever(search_kwargs={"k": 3})
+    # 모든 파일 컬렉션에서 리트리버를 가져와 통합 검색을 수행합니다.
+    all_collections = vectorstore.get_all_file_collections()
+    if not all_collections:
+        print("[-RAG-] No file collections available for global RAG search.")
+        return "현재 검색할 수 있는 문서가 없습니다."
+
+    # 임시 방편: 첫 번째 컬렉션의 리트리버를 사용합니다.
+    # 실제 전역 검색을 위해서는 모든 컬렉션의 리트리버를 통합하는 로직이 필요합니다.
+    first_collection_key = next(iter(all_collections))
+    retriever = all_collections[first_collection_key]['vectordb'].as_retriever(search_kwargs={"k": 3})
+    
     chain = get_qa_chain(retriever)
     result = chain.invoke(query)
 
@@ -208,6 +147,7 @@ def ask_rag(query: str):
         return answer_text.strip()
     print(f"[-RAG-] ask_rag() unexpected result format: {result}")
     return result
+
 
 # 2025-08-07 업로드 파일에 대한 질의 실행 함수 (LLM 호출)
 # 특정 retriever를 사용하여 질문에 대한 답변을 생성하는 함수 : retriever는 PDF 파일에 대한 검색 기능을 제공
@@ -255,69 +195,6 @@ def analyze_sentiment(gender: str, age: str, emotion: str, meaning: str, action:
     # log_sentiment_result(sentiment_class)
 
     return response
-
-# 벡터 데이터베이스 생성을 위한 내부 함수, 2025-08-19 jylee
-def _create_vectordb_instance(docs=None, collection_name=None):
-    """벡터 데이터베이스 인스턴스를 생성하는 내부 함수"""
-    if docs is not None:
-        # 문서로부터 새로운 vectordb 생성
-        return Chroma.from_documents(
-            documents=docs,
-            embedding=models.get_embedding_model(),
-            persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
-            collection_name=collection_name
-        )
-    else:
-        # 기존 컬렉션 로드
-        return Chroma(
-            embedding_function=models.get_embedding_model(),
-            persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
-            collection_name=collection_name
-        )
-
-# 파일별 벡터 데이터베이스를 생성하는 함수, 2025-08-19 jylee
-def create_file_vectordb(filename: str, docs):
-    """특정 파일에 대한 개별 벡터DB 컬렉션을 생성합니다."""
-    collection_name = generate_collection_name(filename)
-
-    # 내부 함수를 사용하여 vectordb 생성
-    vectordb = _create_vectordb_instance(docs=docs, collection_name=collection_name)
-
-    # 파일 컬렉션 딕셔너리에 저장
-    file_collections[filename] = {
-        'vectordb': vectordb,
-        'collection_name': collection_name
-    }
-
-    print(f"[-RAG-] Created collection '{collection_name}' for file: {filename}")
-    return vectordb
-
-# 파일별 벡터DB를 가져오는 함수
-def get_file_vectordb(filename: str):
-    """특정 파일의 벡터DB를 반환합니다."""
-    if filename in file_collections:
-        return file_collections[filename]['vectordb']
-
-    # 기존 컬렉션이 있는지 확인
-    collection_name = generate_collection_name(filename)
-    try:
-        # 내부 함수를 사용하여 기존 컬렉션 로드 (docs=None이므로 기존 컬렉션만 로드)
-        vectordb_instance = _create_vectordb_instance(docs=None, collection_name=collection_name)
-
-        file_collections[filename] = {
-            'vectordb': vectordb_instance,
-            'collection_name': collection_name
-        }
-
-        print(f"[-RAG-] Loaded existing collection '{collection_name}' for file: {filename}")
-        return vectordb_instance
-    except Exception as e:
-        print(f"[-RAG-] Error loading collection for {filename}: {e}")
-        return None
-
-# 모든 파일 컬렉션 목록을 반환하는 함수
-def get_all_file_collections():
-    return file_collections
 
 # 텍스트 요약 함수, 2025-08-19 jylee
 def summarize_text(text_to_summarize: str) -> str:

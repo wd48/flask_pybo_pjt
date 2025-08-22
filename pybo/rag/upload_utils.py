@@ -5,7 +5,7 @@ from datetime import datetime
 import uuid
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pybo.rag.pipeline import (
+from pybo.rag.vectorstore import (
     create_file_vectordb, get_file_vectordb,
     get_all_file_collections, generate_collection_name
 )
@@ -127,18 +127,16 @@ def get_file_collection_info() -> dict:
                 'collection_name': collection_name,
                 'document_count': count
             }
-        except ValueError:
-            # 컬렉션이 존재하지 않는 경우
+        except ValueError: # 컬렉션이 존재하지 않는 경우
             info[filename] = {
                 'collection_name': collection_name,
                 'document_count': 0
             }
         except Exception as e:
-            # 기타 예외 처리
             print(f"[-RAG-] Error getting collection info for {filename}: {e}")
             info[filename] = {
                 'collection_name': collection_name,
-                'document_count': 'Error'
+                'document_count': 0 # 오류 발생 시 0으로 설정
             }
             
     return info
