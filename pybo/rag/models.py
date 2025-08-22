@@ -1,6 +1,6 @@
 # pybo/rag/models.py
 from flask import current_app
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.llms import Ollama
 
 # 전역 모델 변수

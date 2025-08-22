@@ -17,8 +17,14 @@ def get_persistent_client():
     global persistent_client_instance
     if persistent_client_instance is None:
         try:
-            persistent_client_instance = chromadb.PersistentClient(current_app.config["CHAT_DB_PERSIST_DIR"])
-            print(f"[-RAG-] Initialized ChromaDB PersistentClient at {current_app.config["CHAT_DB_PERSIST_DIR"]}")
+            persist_dir_name = current_app.config["CHAT_DB_PERSIST_DIR"]
+            # 프로젝트 루트 경로를 기준으로 절대 경로 생성
+            project_root = os.path.dirname(current_app.root_path)
+            persist_dir = os.path.join(project_root, persist_dir_name)
+            
+            print(f"[-RAG-] Attempting to initialize ChromaDB at absolute path: {persist_dir}")
+            persistent_client_instance = chromadb.PersistentClient(path=persist_dir)
+            print(f"[-RAG-] Initialized ChromaDB PersistentClient at {persist_dir}")
         except Exception as e:
             print(f"[-RAG-] Error initializing ChromaDB PersistentClient: {e}")
             # 오류 발생 시 None을 반환하거나 적절한 오류 처리를 할 수 있습니다.
@@ -150,3 +156,64 @@ def get_file_vectordb(filename: str):
 # 모든 파일 컬렉션 목록을 반환하는 함수
 def get_all_file_collections():
     return file_collections
+
+# 파일 컬렉션을 삭제하는 함수
+def delete_file_collection(filename: str):
+    """특정 파일의 컬렉션을 삭제합니다."""
+    if filename in file_collections:
+        collection_name = file_collections[filename]['collection_name']
+        try:
+            # 1. file_collections 딕셔너리에서 삭제
+            del file_collections[filename]
+
+            # 2. ChromaDB 컬렉션 삭제
+            client = get_persistent_client()
+            if client:
+                client.delete_collection(name=collection_name)
+                print(f"[-RAG-] Deleted collection '{collection_name}' from ChromaDB.")
+            else:
+                print(f"[-RAG-] Could not get ChromaDB client to delete collection '{collection_name}'.")
+
+            return True
+        except Exception as e:
+            print(f"[-RAG-] Error deleting collection '{collection_name}': {e}")
+            return False
+    return False
+
+# 모든 파일 컬렉션을 삭제하는 함수
+def delete_all_file_collections():
+    """모든 파일 컬렉션을 삭제합니다."""
+    all_filenames = list(file_collections.keys())
+    for filename in all_filenames:
+        delete_file_collection(filename)
+    print("[-RAG-] All file collections have been deleted.")
+
+# 서버 시작 시 기존 컬렉션을 로드하는 함수
+def load_existing_collections():
+    """서버 시작 시 persist_directory에 있는 모든 컬렉션을 로드합니다."""
+    client = get_persistent_client()
+    if client:
+        existing_collections = client.list_collections()
+        for collection in existing_collections:
+            # 컬렉션 이름으로부터 원래 파일명을 유추하는 것은 어려움
+            # 'file_' 접두사와 해시를 기반으로 로드
+            if collection.name.startswith("file_"):
+                # 임시로 컬렉션 이름 자체를 filename으로 사용
+                # TODO: 컬렉션 메타데이터에 원본 파일명을 저장하는 기능 추가 필요
+                filename = collection.name 
+                try:
+                    vectordb_instance = _create_vectordb_instance(collection_name=collection.name)
+                    file_collections[filename] = {
+                        'vectordb': vectordb_instance,
+                        'collection_name': collection.name
+                    }
+                    print(f"[-RAG-] Loaded existing collection: {collection.name}")
+                except Exception as e:
+                    print(f"[-RAG-] Error loading existing collection {collection.name}: {e}")
+    else:
+        print("[-RAG-] Could not get ChromaDB client to load existing collections.")
+
+# 애플리케이션 컨텍스트가 생성될 때 호출될 함수
+def init_app(app):
+    with app.app_context():
+        load_existing_collections()

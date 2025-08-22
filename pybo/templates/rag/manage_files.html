@@ -118,4 +118,33 @@
 
 </div>
 
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-labelledby="loadingModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="loadingModalLabel">처리 중</h5>
+      </div>
+      <div class="modal-body text-center">
+        <div class="spinner-border" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-3">파일을 처리하고 있습니다. 잠시만 기다려 주세요...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const uploadForm = document.querySelector('form[enctype="multipart/form-data"]');
+  if (uploadForm) {
+    uploadForm.addEventListener('submit', function() {
+      var myModal = new bootstrap.Modal(document.getElementById('loadingModal'), {});
+      myModal.show();
+    });
+  }
+});
+</script>
+
 {% endblock %}

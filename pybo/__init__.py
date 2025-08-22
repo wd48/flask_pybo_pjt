@@ -23,6 +23,7 @@ db = SQLAlchemy(metadata=MetaData(naming_convention=naming_convention))
 migrate = Migrate()
 mail = Mail()
 from . import models  # 모델을 임포트하여 SQLAlchemy가 모델 클래스를 인식하도록 함
+from .rag import vectorstore # RAG 벡터스토어 초기화를 위해 추가
 
 def create_app():
     app = Flask(__name__)
@@ -36,6 +37,7 @@ def create_app():
     # ORM
     db.init_app(app)
     mail.init_app(app)
+    vectorstore.init_app(app) # RAG 벡터스토어 초기화
 
     if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite'):
         migrate.init_app(app, db, render_as_batch=True)
