@@ -106,12 +106,15 @@ def _create_vectordb_instance(docs=None, collection_name=None):
     if not client:
         raise ConnectionError("ChromaDB PersistentClient를 초기화할 수 없습니다.")
 
+    # ❗️사용할 임베딩 함수 호출, 2025-08-25 jylee
+    embedding_function = models.get_embedding_model()
+
     if docs is not None:
         # 문서로부터 새로운 vectordb 생성
         # langchain-chroma의 Chroma 객체에 관리하는 client를 명시적으로 전달, 2025-08-25 jylee
         return Chroma.from_documents(
             documents=docs,
-            embedding=models.get_embedding_model(),
+            embedding=embedding_function,
             persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
             collection_name=collection_name,
             client=client   # 중앙화된 클라이언트를 사용, 2025-08-25 jylee
@@ -119,7 +122,7 @@ def _create_vectordb_instance(docs=None, collection_name=None):
     else:
         # 기존 컬렉션 로드
         return Chroma(
-            embedding_function=models.get_embedding_model(),
+            embedding_function=embedding_function,
             persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
             collection_name=collection_name,
             client=client  # 중앙화된 클라이언트를 사용, 2025-08-25 jylee
