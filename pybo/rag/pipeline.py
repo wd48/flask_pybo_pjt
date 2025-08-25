@@ -206,7 +206,8 @@ def summarize_text(text_to_summarize: str) -> str:
         template="다음 텍스트를 3~5문장으로 요약해 주세요:\n\n---\n{text_content}\n\n---\n\n요약:"
     )
     
-    chain = LLMChain(llm=models.get_llm(), prompt=prompt)
+    # chain = LLMChain(llm=models.get_llm(), prompt=prompt)
+    chain = models.get_llm() | prompt  # 체인 연결 방식 변경
     
     # Take the first 1500 characters for a brief summary
     summary = chain.run(text_content=text_to_summarize[:1500])
