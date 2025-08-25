@@ -1,4 +1,5 @@
 # pybo/rag/models.py
+import os
 from flask import current_app
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.llms import Ollama
@@ -12,9 +13,11 @@ def get_embedding_model():
     """임베딩 모델을 로드하고 반환합니다. 모델이 이미 로드된 경우 기존 객체를 반환합니다."""
     global embedding_model
     if embedding_model is None:
-        print(f"[-RAG-] Initializing embedding model: {current_app.config['EMBEDDING_MODEL']}")
+        # 모델의 로컬 경로를 지정합니다.
+        model_path = os.path.join(current_app.root_path, "..", "local_models", "jhgan_ko-sroberta-multitask")
+        print(f"[-RAG-] Initializing embedding model from local path: {model_path}")
         embedding_model = HuggingFaceEmbeddings(
-            model_name=current_app.config["EMBEDDING_MODEL"]
+            model_name=model_path
         )
     return embedding_model
 

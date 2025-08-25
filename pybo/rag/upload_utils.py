@@ -5,15 +5,8 @@ from datetime import datetime
 import uuid
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pybo.rag.vectorstore import (
-    create_file_vectordb, get_file_vectordb,
-    get_all_file_collections, generate_collection_name, get_persistent_client
-)
+from . import vectorstore
 from pybo.rag.models import (get_embedding_model)
-
-# ChromaDB와 관련된 라이브러리 임포트
-import chromadb
-from config import CHAT_DB_PERSIST_DIR
 
 # upload_folder is now defined within the functions that use it
 # to avoid working outside of the application context.
@@ -68,8 +61,8 @@ def index_pdf(filepath: str, chunk_size: int=500, chunk_overlap: int=50) -> int:
         doc.metadata["source"] = filepath
         doc.metadata["filename"] = filename
 
-    collection_name = generate_collection_name(filename)
-    collection = get_persistent_client().get_or_create_collection(name=collection_name,
+    collection_name = vectorstore.generate_collection_name(filename)
+    collection = vectorstore.get_persistent_client().get_or_create_collection(name=collection_name,
                                                                   embedding_function=get_embedding_model())
 
     # 여기서 `documents` 파라미터의 각 요소를 명시적으로 문자열로 변환합니다.
@@ -78,7 +71,7 @@ def index_pdf(filepath: str, chunk_size: int=500, chunk_overlap: int=50) -> int:
         documents=[str(doc.page_content) for doc in final_docs],
     )
 
-    print(f"[-RAG-] index_pdf() indexed {len(final_docs)} chunks from {filepath} into collection '{generate_collection_name(filename)}'")
+    print(f"[-RAG-] index_pdf() indexed {len(final_docs)} chunks from {filepath} into collection '{vectorstore.generate_collection_name(filename)}'")
     return len(final_docs)
 
 # 3) 저장 + 인덱싱 헬퍼 : 추가된 청크 수 반환
@@ -97,7 +90,7 @@ def list_uploaded_pdfs() -> List[str]:
 # 5) 특정 pdf에만 한정된 retriever 생성 (개별 컬렉션에서)
 def get_pdf_retriever(filename: str, k: int=3):
     """특정 파일의 개별 컬렉션에서 retriever를 생성합니다."""
-    file_vectordb = get_file_vectordb(filename)
+    file_vectordb = vectorstore.get_file_vectordb(filename)
     if file_vectordb is None:
         print(f"[-RAG-] get_pdf_retriever() - No collection found for file: {filename}")
         return None
@@ -109,22 +102,31 @@ def get_pdf_retriever(filename: str, k: int=3):
 def get_collection_names() -> List[str]:
     """ChromaDB 컬렉션 이름 목록을 반환합니다."""
     try:
-        persistent_client = get_persistent_client()
+        # ❗️ 4. 직접 생성 대신 중앙화된 함수 호출
+        persistent_client = vectorstore.get_persistent_client()
         if not persistent_client:
             raise Exception("PersistentClient 초기화에 실패했습니다.")
 
+        # 호환성을 위한 분기 처리, 2025-08-25 jylee
         collections = persistent_client.list_collections()
-        collection_names = [c.name for c in collections]
+        if collections and not isinstance(collections[0], str):
+            # 구버전 호환성
+            collection_names = [c.name for c in collections]
+        else:
+            # 신버전: 이름 리스트
+            collection_names = collections
+
         print(f"[-RAG-] Found {len(collection_names)} collections: {collection_names}")
         return collection_names
     except Exception as e:
-        print(f"[-RAG-] Error getting collection names: {e}")
+        print(f"[-RAG-] Error retrieving collection names: {e}")
         return []
 
 # 파일별 컬렉션 정보를 반환하는 함수
 def get_file_collection_info() -> dict:
     """파일별 컬렉션 정보를 반환합니다."""
-    persistent_client = get_persistent_client()
+    # 5. 직접 생성 대신 중앙화된 함수 호출
+    persistent_client = vectorstore.get_persistent_client()
     if not persistent_client:
         print("[-RAG-] Persistent client not initialized. Cannot get file collection info.")
         return {}
@@ -133,7 +135,7 @@ def get_file_collection_info() -> dict:
     
     # 실제 업로드된 파일 목록을 기준으로 순회
     for filename in list_uploaded_pdfs():
-        collection_name = generate_collection_name(filename)
+        collection_name = vectorstore.generate_collection_name(filename)
         try:
             # ChromaDB에서 직접 컬렉션 정보를 가져옴
             collection = persistent_client.get_collection(name=collection_name)
@@ -170,8 +172,9 @@ def delete_collection_and_file(filename: str) -> bool:
             print(f"[-RAG-] Physical file not found, skipping deletion: {filepath}")
 
         # 2. ChromaDB 컬렉션 삭제
-        collection_name = generate_collection_name(filename)
-        persistent_client = get_persistent_client()
+        # 직접 생성 대신 중앙화된 함수 호출
+        collection_name = vectorstore.generate_collection_name(filename)
+        persistent_client = vectorstore.get_persistent_client()
         if not persistent_client:
             raise Exception("PersistentClient 초기화에 실패했습니다.")
 
@@ -182,8 +185,8 @@ def delete_collection_and_file(filename: str) -> bool:
             print(f"[-RAG-] Collection '{collection_name}' not found, skipping deletion.")
 
         # 3. 메모리 캐시에서 제거
-        if filename in get_all_file_collections():
-            del get_all_file_collections()[filename]
+        if filename in vectorstore.get_all_file_collections():
+            del vectorstore.get_all_file_collections()[filename]
             print(f"[-RAG-] Removed '{filename}' from in-memory cache.")
         
         return True

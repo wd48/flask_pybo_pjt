@@ -1,12 +1,10 @@
 # pybo/rag/routes.py
 import os
-import chromadb
 import json
 from datetime import datetime
 from flask import Blueprint, render_template, request, url_for, redirect, flash, jsonify, session, current_app
 from langchain.evaluation import load_evaluator
 from langchain_community.document_loaders import PyPDFLoader
-from config import CHAT_DB_PERSIST_DIR
 from .pipeline import ask_rag, run_llm_chain, analyze_sentiment, summarize_text
 from .upload_utils import (
     save_pdf_and_index, list_uploaded_pdfs, get_pdf_retriever,
@@ -15,6 +13,9 @@ from .upload_utils import (
 from .metrics import get_chatbot_metrics
 from .models import get_llm
 from .vectorstore import get_persistent_client # get_persistent_client 임포트 추가
+
+import chromadb
+from chromadb.api.models.Collection import Collection
 
 bp = Blueprint("rag", __name__, url_prefix="/chat")
 
@@ -150,20 +151,15 @@ def delete_file(filename):
 # 설정 페이지 및 컬렉션 관리
 @bp.route('/settings')
 def settings():
-    collections_info = []
-    try:
-        persistent_client = get_persistent_client()
-        if persistent_client:
-            collections = persistent_client.list_collections()
-            for collection in collections:
-                collections_info.append({
-                    "name": collection.name,
-                    "count": collection.count()
-                })
-    except Exception as e:
-        flash(f"컬렉션 정보를 가져오는 중 오류가 발생했습니다: {e}")
-    
-    return render_template('rag/settings.html', collections=collections_info)
+    collection_info = get_file_collection_info() # get_file_collection_info() 사용
+    collections_list = []
+    for filename, info in collection_info.items():
+        collections_list.append({
+            "name": info['collection_name'],
+            "count": info['document_count']
+        })
+    print(f"--- Settings Collections: {collections_list} ---")
+    return render_template('rag/settings.html', collections=collections_list)
 
 @bp.route('/settings/delete/<collection_name>', methods=['POST'])
 def delete_setting_collection(collection_name):

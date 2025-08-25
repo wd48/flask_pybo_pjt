@@ -17,14 +17,8 @@ def get_persistent_client():
     global persistent_client_instance
     if persistent_client_instance is None:
         try:
-            persist_dir_name = current_app.config["CHAT_DB_PERSIST_DIR"]
-            # 프로젝트 루트 경로를 기준으로 절대 경로 생성
-            project_root = os.path.dirname(current_app.root_path)
-            persist_dir = os.path.join(project_root, persist_dir_name)
-            
-            print(f"[-RAG-] Attempting to initialize ChromaDB at absolute path: {persist_dir}")
-            persistent_client_instance = chromadb.PersistentClient(path=persist_dir)
-            print(f"[-RAG-] Initialized ChromaDB PersistentClient at {persist_dir}")
+            print(f"[-RAG-] Initializing ChromaDB PersistentClient at {current_app.config['CHAT_DB_PERSIST_DIR']}")
+            persistent_client_instance = chromadb.PersistentClient(current_app.config["CHAT_DB_PERSIST_DIR"])
         except Exception as e:
             print(f"[-RAG-] Error initializing ChromaDB PersistentClient: {e}")
             # 오류 발생 시 None을 반환하거나 적절한 오류 처리를 할 수 있습니다.
@@ -37,17 +31,19 @@ file_collections = {}
 # 파일명을 기반으로 컬렉션 이름을 생성하는 함수
 def generate_collection_name(filename: str) -> str:
     """파일 이름으로부터 ChromaDB 컬렉션 이름을 생성합니다."""
-    base_name = os.path.splitext(filename)[0].lower()
+    # 파일 확장자를 제거하고, 타임스탬프와 랜덤 문자열 부분을 분리합니다.
+    base_name = os.path.splitext(filename)[0]
 
     # 1. 허용된 문자(a-z, 0-9, ., _, -)만 남기고 나머지는 밑줄로 대체
-    cleaned_name = re.sub(r'[^a-z0-9._-]+', '_', base_name)
-
+    # 원본 파일명은 최대 40자까지만 사용하고, 특수문자를 정리, 2025-08-25 jylee
+    cleaned_name = re.sub(r'[^a-z0-9._-]+', '_', base_name.lower())[:40]
+    cleaned_name = cleaned_name.strip("_-")
     # 2. 연속된 밑줄을 하나로 줄임
-    cleaned_name = re.sub(r'_+', '_', cleaned_name)
+    # cleaned_name = re.sub(r'_+', '_', cleaned_name)
 
     # 3. 이름의 시작과 끝이 [a-z0-9]가 되도록 처리
     #    밑줄이나 하이픈으로 시작하거나 끝나는 경우 제거
-    cleaned_name = cleaned_name.strip('_- ') # Added space to strip
+    # cleaned_name = cleaned_name.strip('_- ') # Added space to strip
 
     # 4. 이름이 비어있으면 'default'로 설정
     if not cleaned_name:
@@ -66,18 +62,25 @@ def generate_collection_name(filename: str) -> str:
         cleaned_name = cleaned_name + 'f'
 
     # 8. 파일명 해시를 추가하여 중복 방지
-    file_hash = hashlib.md5(filename.encode()).hexdigest()[:8]
+    file_hash = hashlib.md5(filename.encode()).hexdigest()[:12]
     
     # 9. 최종 컬렉션 이름 생성 전, cleaned_name의 길이를 적절히 제한
     #    (예: 512 - len("file__") - len(file_hash) - 1 = 512 - 13 = 499자)
-    max_cleaned_name_len = 499 
-    if len(cleaned_name) > max_cleaned_name_len:
-        cleaned_name = cleaned_name[:max_cleaned_name_len]
+    # max_cleaned_name_len = 115
+    # if len(cleaned_name) > max_cleaned_name_len:
+    #     cleaned_name = cleaned_name[:max_cleaned_name_len]
 
     final_collection_name = f"file_{cleaned_name}_{file_hash}"
 
-    # 10. 최종 길이 제한 (ChromaDB max 512 chars)
-    return final_collection_name[:512]
+    # ChromaDB의 이름 규칙에 맞게 최종 검증, 2025-08-25 jylee
+    # 1. 허용된 문자만 포함 (이미 처리됨)
+    if len(final_collection_name) < 3:
+        final_collection_name = 'collection_' + file_hash
+    # 2. 시작 문자가 알파벳이나 숫자가 아니면 'c' 추가
+    if not final_collection_name[0].isalnum():
+        final_collection_name = 'c' + final_collection_name
+
+    return final_collection_name[:63]  # ChromaDB 이름 길이 제한(63) 준수
 
 # 벡터 데이터베이스를 가져오는 함수 (모든 문서를 검색 대상으로 함)
 def get_vectordb():
@@ -96,21 +99,30 @@ def get_vectordb():
 
 # 벡터 데이터베이스 생성을 위한 내부 함수, 2025-08-19 jylee
 def _create_vectordb_instance(docs=None, collection_name=None):
-    """벡터 데이터베이스 인스턴스를 생성하는 내부 함수"""
+    """벡터 데이터베이스 인스턴스를 생성하는 내부 함수
+        ❗️중앙화된 클라이언트를 사용하도록 수정, 2025-08-25 jylee
+    """
+    client = get_persistent_client()
+    if not client:
+        raise ConnectionError("ChromaDB PersistentClient를 초기화할 수 없습니다.")
+
     if docs is not None:
         # 문서로부터 새로운 vectordb 생성
+        # langchain-chroma의 Chroma 객체에 관리하는 client를 명시적으로 전달, 2025-08-25 jylee
         return Chroma.from_documents(
             documents=docs,
             embedding=models.get_embedding_model(),
             persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
-            collection_name=collection_name
+            collection_name=collection_name,
+            client=client   # 중앙화된 클라이언트를 사용, 2025-08-25 jylee
         )
     else:
         # 기존 컬렉션 로드
         return Chroma(
             embedding_function=models.get_embedding_model(),
             persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
-            collection_name=collection_name
+            collection_name=collection_name,
+            client=client  # 중앙화된 클라이언트를 사용, 2025-08-25 jylee
         )
 
 # 파일별 벡터 데이터베이스를 생성하는 함수, 2025-08-19 jylee
