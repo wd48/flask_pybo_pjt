@@ -66,14 +66,21 @@ def index_pdf(filepath: str, chunk_size: int=500, chunk_overlap: int=50) -> int:
     collection = vectorstore.get_persistent_client().get_or_create_collection(name=collection_name)
 
     # 청크 단위로 나누어 일괄 처리 (메모리 절약 및 성능 향상), 2025-08-26 jylee
+    embedding_model = get_embedding_model()
     batch_size = 100  # Process 100 chunks at a time
     total_chunks = len(final_docs)
     for i in range(0, total_chunks, batch_size):
         batch_docs = final_docs[i:i + batch_size]
         
+        # 클라이언트 사이드에서 임베딩 생성, 2025-08-26 jylee
+        batch_embeddings = embedding_model.embed_documents(
+            [doc.page_content for doc in batch_docs]
+        )
+
         collection.add(
             ids=[f"doc_{i + j}" for j in range(len(batch_docs))],
-            documents=[doc.page_content for doc in batch_docs],
+            embeddings=batch_embeddings,
+            documents=[doc.page_content for doc in batch_docs], # 챗봇 답변을 위한 원본 텍스트 추가, 2025-08-26 jylee
             metadatas=[doc.metadata for doc in batch_docs]
         )
         print(f"[-RAG-] Indexed batch {i // batch_size + 1}/{(total_chunks + batch_size - 1) // batch_size} with {len(batch_docs)} chunks.")
