@@ -38,6 +38,7 @@ def save_pdf(file_storage) -> LiteralString | str | bytes:
 def index_pdf(filepath: str, chunk_size: int=500, chunk_overlap: int=50) -> int:
     filename = os.path.basename(filepath)
     loader = PyPDFLoader(filepath)
+    # PDF의 모든 텍스트를 한 번에 메모리로 호출한다.
     pages = loader.load()
 
     # PDF에서 텍스트를 추출하지 못한 경우 (예: 이미지로만 구성된 PDF)를 대비하여 필터링
@@ -46,7 +47,7 @@ def index_pdf(filepath: str, chunk_size: int=500, chunk_overlap: int=50) -> int:
     if not pages_with_content:
         print(f"[-RAG-] Warning: No text could be extracted from {filename}. Skipping indexing.")
         return 0
-
+    # 메모리에 올라단 모든 문서의 텍스트를 청크 단위로 분할
     splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     docs = splitter.split_documents(pages_with_content)
 
@@ -62,14 +63,20 @@ def index_pdf(filepath: str, chunk_size: int=500, chunk_overlap: int=50) -> int:
         doc.metadata["filename"] = filename
 
     collection_name = vectorstore.generate_collection_name(filename)
-    collection = vectorstore.get_persistent_client().get_or_create_collection(name=collection_name,
-                                                                  embedding_function=get_embedding_model())
+    collection = vectorstore.get_persistent_client().get_or_create_collection(name=collection_name)
 
-    # 여기서 `documents` 파라미터의 각 요소를 명시적으로 문자열로 변환합니다.
-    collection.add(
-        ids=[f"doc_{i}" for i in range(len(final_docs))],
-        documents=[str(doc.page_content) for doc in final_docs],
-    )
+    # 청크 단위로 나누어 일괄 처리 (메모리 절약 및 성능 향상), 2025-08-26 jylee
+    batch_size = 100  # Process 100 chunks at a time
+    total_chunks = len(final_docs)
+    for i in range(0, total_chunks, batch_size):
+        batch_docs = final_docs[i:i + batch_size]
+        
+        collection.add(
+            ids=[f"doc_{i + j}" for j in range(len(batch_docs))],
+            documents=[doc.page_content for doc in batch_docs],
+            metadatas=[doc.metadata for doc in batch_docs]
+        )
+        print(f"[-RAG-] Indexed batch {i // batch_size + 1}/{(total_chunks + batch_size - 1) // batch_size} with {len(batch_docs)} chunks.")
 
     print(f"[-RAG-] index_pdf() indexed {len(final_docs)} chunks from {filepath} into collection '{vectorstore.generate_collection_name(filename)}'")
     return len(final_docs)
