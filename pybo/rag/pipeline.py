@@ -21,10 +21,10 @@ import os
 import time
 from dotenv import load_dotenv
 from flask import current_app
-from langchain.chains import LLMChain, RetrievalQA
+from langchain.chains import LLMChain, RetrievalQA, create_history_aware_retriever, create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.prompts import PromptTemplate
-from langchain_community.document_loaders import TextLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from . import models, vectorstore
 from .metrics import log_chatbot_response_time
@@ -93,17 +93,53 @@ def get_sentiment_chain():
     print(f"[-RAG-] get_sentiment_chain() initialized with LLM: {current_app.config['LLM_MODEL']}")
     return sentiment_chain
 
-# 2025-08-06 문서 로딩 및 분할
-# 텍스트 파일 로딩 후 500자 단위로 나눈다
-def load_and_split_documents(file_path: str):
-    loader = TextLoader(file_path, encoding="utf-8")
-    docs = loader.load()
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=100
+# 대화형 RAG 체인 생성 함수, 2025-08-27 jylee
+def get_conversational_rag_chain(retriever):
+    """
+    대화 기록을 바탕으로 질문을 재작성하고, 문서를 검색하여 답변을 생성하는 대화형 RAG 체인을 생성합니다.
+    """
+    llm = models.get_llm()
+
+    # 1. 질문 재작성(Query Rewriting)을 위한 프롬프트
+    contextualize_q_system_prompt = (
+        "주어진 채팅 기록과 사용자의 최근 질문을 바탕으로, "
+        "채팅 기록을 참조할 필요가 없는 독립적인 질문으로 바꾸어 주세요. "
+        "답변은 하지 말고, 필요한 경우 질문만 다시 만들어 주세요."
     )
-    print(f"[-RAG-] load_and_split_documents() loaded {len(docs)} documents from {file_path}")
-    return splitter.split_documents(docs)
+    # 1-a. 질문 재작성 프롬프트 템플릿
+    contextualize_q_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", contextualize_q_system_prompt),
+            MessagesPlaceholder("chat_history"),
+            ("human", "{input}"),
+        ]
+    )
+    # 1-b. 질문 재작성 체인 생성
+    history_aware_retriever = create_history_aware_retriever(
+        llm, retriever, contextualize_q_prompt
+    )
+
+    # 2. 최종 답변 생성을 위한 프롬프트
+    qa_system_prompt = (
+        "당신은 주어진 컨텍스트(context)에서만 질문에 답변하는 AI 어시스턴트입니다. "
+        "정확하고 간결하게, 한국어로 답변해 주세요.\n\n"
+        "{context}"
+    )
+    # 2-a. 최종 답변 프롬프트 템플릿
+    qa_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", qa_system_prompt),
+            MessagesPlaceholder("chat_history"),
+            ("human", "{input}"),
+        ]
+    )
+    # 재작성된 질문과 검색된 문서를 받아 답변을 생성하는 체인 생성
+    question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
+
+    # 3. 위 두 체인을 하나로 결합
+    rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
+
+    return rag_chain
 
 # 전역 검색 함수 : 사용자가 입력한 질문에 대해 RAG(검색 증강 생성) 방식으로 답변을 생성하는 함수
 def ask_rag(query: str):

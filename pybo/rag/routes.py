@@ -5,14 +5,15 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, url_for, redirect, flash, jsonify, session, current_app
 from langchain.evaluation import load_evaluator
 from langchain_community.document_loaders import PyPDFLoader
-from .pipeline import ask_rag, run_llm_chain, analyze_sentiment, summarize_text
+from langchain_core.messages import HumanMessage, AIMessage
+from .pipeline import ask_rag, run_llm_chain, analyze_sentiment, summarize_text, get_conversational_rag_chain
 from .upload_utils import (
     save_pdf_and_index, list_uploaded_pdfs, get_pdf_retriever,
     get_collection_names, get_file_collection_info, delete_collection_and_file
 )
 from .metrics import get_chatbot_metrics
 from .models import get_llm
-from .vectorstore import get_persistent_client # get_persistent_client 임포트 추가
+from .vectorstore import get_persistent_client, get_all_file_collections
 
 import chromadb
 from chromadb.api.models.Collection import Collection
@@ -47,17 +48,41 @@ def ask():
     if not question:
         return jsonify({"error": "질문을 입력하세요"}), 400
 
+    # 1. 세션의 chat_history 를 LangChain이 이해하는 형태로 변환, 2025-08-27 jylee
+    chat_history_from_session = session.get('chat_history')
+    chat_history_for_chain = []
+    print(f"--- Chat History from Session: {chat_history_from_session} ---")
+    for msg in chat_history_from_session:
+        if msg['role'] == 'user':
+            chat_history_for_chain.append(HumanMessage(content=msg['content']))
+        elif msg['role'] == 'bot':
+            chat_history_for_chain.append(AIMessage(content=msg['content']))
+
+    # 2. 사용자 질문을 세션에 추가 (UI 표시용)
     session['chat_history'].append({"role": "user", "content": question})
+    session.modified = True # 세션이 변경되었음을 플라스크에 알림
 
     answer = ""
+    # 3. Retriever를 가져와 새로운 대화형 RAG 체인 생성
     if selected_file:
         retriever = get_pdf_retriever(selected_file)
-        if retriever:
-            answer = run_llm_chain(question, retriever)
-        else:
-            answer = f"파일 '{selected_file}'의 컬렉션을 찾을 수 없습니다."
     else:
-        answer = ask_rag(question)
+        # 전체 문서 검색 로직 (현재는 첫번째 컬렉션 사용)
+        all_collections = get_all_file_collections()
+        if not all_collections:
+            return jsonify({"error": "사용 가능한 문서 컬렉션이 없습니다."}), 500
+        first_collection_key = next(iter(all_collections))
+        retriever = all_collections[first_collection_key]['vectordb'].as_retriever()
+    if not retriever:
+        return jsonify({"answer": "문서 검색기를 준비할 수 없습니다."})
+
+    conversational_rag_chain = get_conversational_rag_chain(retriever)
+
+    # 4. 변환된 대화 기록과 새 질문으로 체인 실행
+    result = conversational_rag_chain.invoke(
+        {"input": question,"chat_history": chat_history_for_chain}
+    )
+    answer = result["answer"]
 
     # 답변 생성 후 평가 실행 및 로그 저장, 2025-08-22 jylee
     # 평가 기준이 있다면 reference를 제공할 수 있습니다.
