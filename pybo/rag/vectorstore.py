@@ -38,12 +38,6 @@ def generate_collection_name(filename: str) -> str:
     # 원본 파일명은 최대 40자까지만 사용하고, 특수문자를 정리, 2025-08-25 jylee
     cleaned_name = re.sub(r'[^a-z0-9._-]+', '_', base_name.lower())[:40]
     cleaned_name = cleaned_name.strip("_-")
-    # 2. 연속된 밑줄을 하나로 줄임
-    # cleaned_name = re.sub(r'_+', '_', cleaned_name)
-
-    # 3. 이름의 시작과 끝이 [a-z0-9]가 되도록 처리
-    #    밑줄이나 하이픈으로 시작하거나 끝나는 경우 제거
-    # cleaned_name = cleaned_name.strip('_- ') # Added space to strip
 
     # 4. 이름이 비어있으면 'default'로 설정
     if not cleaned_name:
@@ -63,12 +57,6 @@ def generate_collection_name(filename: str) -> str:
 
     # 8. 파일명 해시를 추가하여 중복 방지
     file_hash = hashlib.md5(filename.encode()).hexdigest()[:12]
-    
-    # 9. 최종 컬렉션 이름 생성 전, cleaned_name의 길이를 적절히 제한
-    #    (예: 512 - len("file__") - len(file_hash) - 1 = 512 - 13 = 499자)
-    # max_cleaned_name_len = 115
-    # if len(cleaned_name) > max_cleaned_name_len:
-    #     cleaned_name = cleaned_name[:max_cleaned_name_len]
 
     final_collection_name = f"file_{cleaned_name}_{file_hash}"
 
