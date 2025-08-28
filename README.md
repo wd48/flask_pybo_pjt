@@ -1,12 +1,16 @@
-# 기술 스택 (ing)
+# 기술 스택
 - flask
 - python 3.13.5
 - LangChain
 - embedding : jhgan/ko-sroberta-multitask
 - LLM : google/gemma-2b-it, gemma3n:latest, exaone3.5:2.4b
-## 추가예정
+- evaluation : [langchain evaluation](https://python.langchain.com/api_reference/langchain/evaluation.html) 
+## 추가예정 (검토단계)
 - models
   - LLM : google/gemma-3n-E2B-it [huggingFace](https://huggingface.co/google/gemma-3n-E2B-it)
+- evaluation
+  - [HF RAG evaluation](https://huggingface.co/learn/cookbook/en/rag_evaluation)
+  - [langFuse](https://langfuse.com/kr)
 
 # reference
 - [flask](https://wikidocs.net/81044)
@@ -82,35 +86,55 @@ $ flask shell
 ## 플라스크+LangChain with RAG 프로젝트 구조
 ```text
 flask_pybo/
-├── config.py
-├── README.md
-├── pybo/
-│   ├── __init__.py
-│   ├── filter.py
-│   ├── forms.py
-│   ├── models.py
-│   ├── rag_chat/
-│   │   ├── __init__.py
-│   │   ├── rag_pipeline.py
-│   │   ├── routes.py
-│   │   ├── upload_utils.py
-│   └── resources/
-│       ├── models/
-│       └── uploads/
-│   └── static/
-│       ├── bootstrap.min.css
-│       ├── bootstrap.min.js
-│       └── style.css
-│   └── templates/
-│       ├── base.html
-│       ├── form_errors.html
-│       ├── navbar.html
-│       ├── answer/
-│       │   └── answer_form.html
-│       ├── auth/
-│       │   ├── login.html
-│       │   └── signup.html
-│       ├── question/
+/pybo
+│  email_utils.py
+│  filter.py
+│  forms.py
+│  models.py
+│  __init__.py
+├─rag
+│  │  langfuse_utils.py
+│  │  metrics.py
+│  │  models.py
+│  │  pipeline.py
+│  │  routes.py
+│  │  upload_utils.py
+│  │  vectorstore.py
+│  │  __init__.py
+├─static
+│      bootstrap.min.css
+│      bootstrap.min.js
+│      style.css
+├─templates
+│  │  base.html
+│  │  form_errors.html
+│  │  navbar.html
+│  ├─answer
+│  │      answer_form.html
+│  ├─auth
+│  │      change_password.html
+│  │      login.html
+│  │      reset_password.html
+│  │      signup.html
+│  ├─comment
+│  │      comment_form.html
+│  ├─question
+│  │      question_detail.html
+│  │      question_form.html
+│  │      question_list.html
+│  └─rag
+│          chat.html
+│          evaluation_results.html
+│          manage_files.html
+│          performance.html
+│          sentiment.html
+│          settings.html
+└──views
+   │  answer_views.py
+   │  auth_views.py
+   │  comment_views.py
+   │  main_views.py
+   └─  question_views.py
 ```
   
 - pybo 디렉터리 안에 있는 __init__.py 파일이 pybo.py 파일의 역할을 대신할 것
