@@ -28,6 +28,7 @@ def get_llm():
     if llm is None:
         print(f"[-RAG-] Initializing LLM: {current_app.config['LLM_MODEL']}")
         llm = Ollama(
+            base_url=current_app.config["LLM_HOST"],
             model=current_app.config["LLM_MODEL"],
             temperature=current_app.config["LLM_TEMPERATURE"]
         )

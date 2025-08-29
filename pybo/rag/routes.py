@@ -1,17 +1,18 @@
 # pybo/rag/routes.py
 import os
 import json
+import time
 from datetime import datetime
-from flask import Blueprint, render_template, request, url_for, redirect, flash, jsonify, session, current_app
+from flask import Blueprint, render_template, request, url_for, redirect, flash, jsonify, session, current_app, Response
 from langchain.evaluation import load_evaluator
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.messages import HumanMessage, AIMessage
-from .pipeline import ask_rag, run_llm_chain, analyze_sentiment, summarize_text, get_conversational_rag_chain
+from .pipeline import ask_rag, run_llm_chain, analyze_sentiment, summarize_text, get_conversational_rag_chain, analyze_sentiment_stream
 from .upload_utils import (
     save_pdf_and_index, list_uploaded_pdfs, get_pdf_retriever,
     get_collection_names, get_file_collection_info, delete_collection_and_file
 )
-from .metrics import get_chatbot_metrics
+from .metrics import get_chatbot_metrics, log_chatbot_response_time
 from .models import get_llm
 from .vectorstore import get_persistent_client, get_all_file_collections
 
@@ -44,6 +45,7 @@ def index():
 def ask():
     question = request.form.get("question")
     selected_file = request.form.get("filename")
+    print(f"--- ask() called with question: '{question}', file: '{selected_file}' ---")
     
     if not question:
         return jsonify({"error": "질문을 입력하세요"}), 400
@@ -65,24 +67,32 @@ def ask():
     answer = ""
     # 3. Retriever를 가져와 새로운 대화형 RAG 체인 생성
     if selected_file:
+        print(f"--- Getting retriever for selected file: {selected_file} ---")
         retriever = get_pdf_retriever(selected_file)
     else:
+        print("--- No file selected, getting retriever for all documents ---")
         # 전체 문서 검색 로직 (현재는 첫번째 컬렉션 사용)
         all_collections = get_all_file_collections()
         if not all_collections:
-            return jsonify({"error": "사용 가능한 문서 컬렉션이 없습니다."}), 500
+            return jsonify({"error": "사용 가능한 문서 컬렉션이 없습니다."} ), 500
         first_collection_key = next(iter(all_collections))
         retriever = all_collections[first_collection_key]['vectordb'].as_retriever()
     if not retriever:
-        return jsonify({"answer": "문서 검색기를 준비할 수 없습니다."})
+        print("--- Failed to get retriever ---")
+        return jsonify({"answer": "문서 검색기를 준비할 수 없습니다."} )
 
     conversational_rag_chain = get_conversational_rag_chain(retriever)
 
     # 4. 변환된 대화 기록과 새 질문으로 체인 실행
+    print("--- Invoking conversational RAG chain ---")
+    start_time = time.time()
     result = conversational_rag_chain.invoke(
         {"input": question,"chat_history": chat_history_for_chain}
     )
+    end_time = time.time()
     answer = result["answer"]
+    log_chatbot_response_time(end_time - start_time, source="챗봇")
+    print(f"--- RAG chain result: {result} ---")
 
     # 답변 생성 후 평가 실행 및 로그 저장, 2025-08-22 jylee
     # 평가 기준이 있다면 reference를 제공할 수 있습니다.
@@ -104,29 +114,33 @@ def clear_chat():
 @bp.route("/summarize", methods=["POST"])
 def summarize():
     filename = request.form.get("filename")
+    print(f"--- summarize() called for file: {filename} ---")
     if not filename:
-        return jsonify({"error": "Filename is required."}),
+        return jsonify({"error": "Filename is required."} ), 400
 
     try:
         upload_folder = current_app.config["CHAT_UPLOAD_FOLDER"]
         filepath = os.path.join(upload_folder, filename)
 
         if not os.path.exists(filepath):
-            return jsonify({"error": "File not found."}),
+            print(f"--- File not found at path: {filepath} ---")
+            return jsonify({"error": "File not found."} ), 404
 
         loader = PyPDFLoader(filepath)
         pages = loader.load()
         full_text = "\n".join(page.page_content for page in pages)
 
         if not full_text.strip():
-            return jsonify({"summary": "이 PDF 파일에서 텍스트를 추출할 수 없습니다."})
+            print(f"--- No text could be extracted from PDF: {filename} ---")
+            return jsonify({"summary": "이 PDF 파일에서 텍스트를 추출할 수 없습니다."} )
 
         summary = summarize_text(full_text)
+        print(f"--- Summary generated for {filename} ---")
         return jsonify({"summary": summary})
 
     except Exception as e:
         print(f"Error during summarization: {e}")
-        return jsonify({"error": "요약 생성 중 오류가 발생했습니다."}),
+        return jsonify({"error": "요약 생성 중 오류가 발생했습니다."} ), 500
 
 # 파일 관리 페이지 및 업로드 기능
 @bp.route("/files", methods=['GET', 'POST'])
@@ -134,7 +148,7 @@ def manage_files():
     files = list_uploaded_pdfs()
     collection_info = get_file_collection_info()
     collection_names = get_collection_names()
-    
+
     if request.method == 'POST':
         if 'pdf_file' not in request.files:
             flash("선택된 파일이 없습니다.")
@@ -147,9 +161,12 @@ def manage_files():
 
         if file and file.filename.endswith('.pdf'):
             try:
+                print(f"--- Uploading and indexing file: {file.filename} ---")
                 chunk_count = save_pdf_and_index(file)
+                print(f"--- File '{file.filename}' uploaded successfully with {chunk_count} chunks ---")
                 flash(f"PDF 파일이 성공적으로 업로드되었습니다. ({chunk_count}개 청크 생성)")
             except Exception as e:
+                print(f"--- Error uploading file '{file.filename}': {e} ---")
                 flash(f"파일 업로드 중 오류가 발생했습니다: {str(e)}")
         else:
             flash("PDF 파일만 업로드할 수 있습니다.")
@@ -163,12 +180,16 @@ def manage_files():
 # 파일 삭제 엔드포인트
 @bp.route("/files/delete/<filename>", methods=['POST'])
 def delete_file(filename):
+    print(f"--- delete_file() called for file: {filename} ---")
     try:
         if delete_collection_and_file(filename):
+            print(f"--- Successfully deleted file and collection for: {filename} ---")
             flash(f"'{filename}' 파일 및 관련 데이터가 성공적으로 삭제되었습니다.")
         else:
+            print(f"--- Failed to delete file or collection for: {filename} ---")
             flash(f"'{filename}' 파일 또는 관련 데이터 삭제에 실패했습니다. 로그를 확인해주세요.")
     except Exception as e:
+        print(f"--- Error deleting file '{filename}': {e} ---")
         flash(f"삭제 중 오류가 발생했습니다: {str(e)}")
     
     return redirect(url_for('rag.manage_files'))
@@ -176,93 +197,108 @@ def delete_file(filename):
 # 설정 페이지 및 컬렉션 관리
 @bp.route('/settings')
 def settings():
-    collection_info = get_file_collection_info() # get_file_collection_info() 사용
+    # 파일과 연결된 컬렉션 정보 가져오기
+    collection_info = get_file_collection_info()
     collections_list = []
     for filename, info in collection_info.items():
         collections_list.append({
             "name": info['collection_name'],
-            "count": info['document_count']
+            "count": info['document_count'],
+            "filename": filename  # 원본 파일명도 함께 전달
         })
+    
+    # 전체 컬렉션 이름 가져오기
+    all_collection_names = get_collection_names()
+
     print(f"--- Settings Collections: {collections_list} ---")
-    return render_template('rag/settings.html', collections=collections_list)
+    return render_template('rag/settings.html', 
+                           collections=collections_list, 
+                           all_collection_names=all_collection_names)
 
 @bp.route('/settings/delete/<collection_name>', methods=['POST'])
 def delete_setting_collection(collection_name):
+    print(f"--- delete_setting_collection() called for collection: {collection_name} ---")
     try:
         persistent_client = get_persistent_client()
         if persistent_client:
             persistent_client.delete_collection(name=collection_name)
+            print(f"--- Collection '{collection_name}' deleted successfully ---")
             flash(f"컬렉션 '{collection_name}'이(가) 삭제되었습니다.")
     except Exception as e:
+        print(f"--- Error deleting collection '{collection_name}': {e} ---")
         flash(f"컬렉션 삭제 중 오류가 발생했습니다: {str(e)}")
     
     return redirect(url_for('rag.settings'))
 
-# # API 엔드포인트
-# @bp.route("/api/collections")
-# def api_collections():
-#     try:
-#         collection_info = get_file_collection_info()
-#         collection_names = get_collection_names()
-#         
-#         return jsonify({
-#             'status': 'success',
-#             'file_collections': collection_info,
-#             'all_collections': collection_names
-#         })
-#     except Exception as e:
-#         return jsonify({
-#             'status': 'error',
-#             'message': str(e)
-#         }), 500
-
 # 감성 분석 페이지 및 기능, 2025-08-22 jylee
-@bp.route("/sentiment_analysis", methods=['GET','POST'])
+@bp.route("/sentiment_analysis", methods=['GET'])
 def sentiment_analysis():
-    result = None
-    if request.method == "POST":
-        # 폼 데이터 가져오기
-        gender = request.form.get('gender')
-        age = request.form.get('age')
-        emotion = request.form.get('emotion')
-        meaning = request.form.get('meaning')
-        action_list = request.form.getlist('action')
+    # 쿼리 파라미터에 'gender'가 있는지 확인하여 일반 페이지 로드와 스트리밍 요청을 구분합니다.
+    if 'gender' in request.args:
+        # 스트리밍 요청 처리
+        gender = request.args.get('gender')
+        age = request.args.get('age')
+        emotion = request.args.get('emotion')
+        meaning = request.args.get('meaning')
+        action_list = request.args.getlist('action')
         action = ', '.join(action_list) if action_list else '없음'
-        reflect_list = request.form.getlist('reflect')
+        reflect_list = request.args.getlist('reflect')
         reflect = ', '.join(reflect_list) if reflect_list else '없음'
-        anchor = request.form.get('anchor')
+        anchor = request.args.get('anchor')
 
-        # 감성 분석 실행
-        result = analyze_sentiment(
-            gender=gender, age=age, emotion=emotion, meaning=meaning,
-            action=action, reflect=reflect, anchor=anchor
-        )
+        # 스트리밍 함수에 전달할 설정값 (컨텍스트가 활성 상태일 때 미리 복사), Application Context 에러 방지
+        config = current_app.config.copy()
 
-        # 감성 분석 질문 구성
-        sentiment_question = f"성별: {gender}, 연령대: {age}, 감정: {emotion}, 이유: {meaning}, 행동: {action}, 성찰: {reflect}, 다짐: {anchor}"
-        # 감성 분석 결과 평가 실행 및 로그 저장
-        run_and_log_evaluation(question=sentiment_question, prediction=result)
+        def generate_stream():
+            stream = analyze_sentiment_stream(
+                config=config,
+                gender=gender, age=age, emotion=emotion, meaning=meaning,
+                action=action, reflect=reflect, anchor=anchor
+            )
+            for chunk in stream:
+                yield f"data: {json.dumps(chunk)}\n\n"
+            yield "event: end\ndata: {}\n\n"
+
+        return Response(generate_stream(), mimetype='text/event-stream')
+
+    # 일반 GET 요청 시에는 차트 데이터 없이 기본 페이지만 렌더링합니다.
+    return render_template("rag/sentiment.html")
+
+# 감정 분석 결과 로깅 엔드포인트, 2025-08-29 jylee
+# 스트리밍 방식으로 변경되어 별도 함수로 구현
+@bp.route("/log_sentiment_result", methods=['POST'])
+def log_sentiment_result():
+    data = request.json
+    try:
+        # 원본 질문 구성
+        sentiment_question = f"성별: {data['gender']}, 연령대: {data['age']}, 감정: {data['emotion']}, 이유: {data['meaning']}, 행동: {data['action']}, 성찰: {data['reflect']}, 다짐: {data['anchor']}"
+        
+        # 평가 및 로그 실행
+        run_and_log_evaluation(question=sentiment_question, prediction=data['result'])
 
         # 기존 로그 저장 로직
-        log_data = {"timestamp": datetime.now().isoformat(), "gender": gender, "age": age, "emotion": emotion, "meaning": meaning, "action": action, "reflect": reflect, "anchor": anchor, "analysis_result": result}
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "gender": data['gender'],
+            "age": data['age'],
+            "emotion": data['emotion'],
+            "meaning": data['meaning'],
+            "action": data['action'],
+            "reflect": data['reflect'],
+            "anchor": data['anchor'],
+            "analysis_result": data['result']
+        }
         logs_dir = os.path.join(current_app.root_path, '..', 'logs')
         os.makedirs(logs_dir, exist_ok=True)
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         log_file_path = os.path.join(logs_dir, f"sentiment_{timestamp_str}.json")
         with open(log_file_path, 'w', encoding='utf-8') as f:
-            json.dump(log_data, f, ensure_ascii=False, indent=4)
-        flash("감정 분석 결과가 기록되었습니다.")
-
-    chatbot_data = get_chatbot_metrics()
-    chatbot_labels = [item['timestamp'] for item in chatbot_data]
-    chatbot_values = [item['duration'] for item in chatbot_data]
-
-    return render_template(
-        "rag/sentiment.html",
-        result=result,
-        chatbot_labels=chatbot_labels,
-        chatbot_values=chatbot_values
-    )
+            json.dump(log_entry, f, ensure_ascii=False, indent=4)
+        
+        return jsonify({"status": "success", "message": "로그가 성공적으로 저장되었습니다."} ), 200
+    except Exception as e:
+        print(f"--- Error during sentiment logging: {e} ---")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # 성능 대시보드, 챗봇 응답 시간 시각화 2025-08-22 jylee
 @bp.route("/performance")
@@ -282,6 +318,7 @@ def performance_dashboard():
 # # 평가를 실행하고 결과를 JSON 파일로 저장합니다.
 def run_and_log_evaluation(question: str, prediction: str, reference: str = None):
     """답변을 평가하고, 결과를 JSON 파일로 저장한 후, 평가 결과를 반환합니다."""
+    print(f"--- Starting evaluation for question: '{question[:50]}...' ---")
     try:
         llm = get_llm()
 
@@ -325,6 +362,7 @@ def run_and_log_evaluation(question: str, prediction: str, reference: str = None
         with open(log_file_path, 'w', encoding='utf-8') as f:
             json.dump(log_data, f, ensure_ascii=False, indent=4)
 
+        print(f"--- Evaluation successful. Log saved to {log_file_path} ---")
         return eval_results
 
     except Exception as e:
@@ -337,7 +375,8 @@ def run_and_log_evaluation(question: str, prediction: str, reference: str = None
 # 2025-08-22 jylee
 @bp.route("/evaluation_results")
 def evaluation_results():
-    """저장된 평가 결과 목록을 보여줍니다."""
+    """저장된 평가 결과 목록과 성능 차트를 보여줍니다."""
+    # 1. 평가 결과 로드
     logs_dir = os.path.join(current_app.root_path, '..', 'evaluation_logs')
     if not os.path.exists(logs_dir):
         os.makedirs(logs_dir)
@@ -354,4 +393,28 @@ def evaluation_results():
             except (json.JSONDecodeError, KeyError) as e:
                 print(f"Error reading or parsing {filename}: {e}")
 
-    return render_template("rag/evaluation_results.html", evaluations=evaluations)
+    # 2. 성능 차트 데이터 처리, 2025-08-29 jylee
+    chatbot_data = get_chatbot_metrics()
+    
+    # 데이터를 source별로 분리하고 타임스탬프를 기준으로 정렬
+    all_timestamps = sorted(list(set(item['timestamp'] for item in chatbot_data)))
+    
+    chatbot_metrics = {}
+    sentiment_metrics = {}
+    for item in chatbot_data:
+        if item['source'] == '챗봇':
+            chatbot_metrics[item['timestamp']] = item['duration']
+        elif item['source'] == '감정 분석':
+            sentiment_metrics[item['timestamp']] = item['duration']
+            
+    # Chart.js 데이터셋 형식에 맞춤 (해당 타임스탬프에 데이터가 없으면 null 처리)
+    chatbot_values = [chatbot_metrics.get(ts) for ts in all_timestamps]
+    sentiment_values = [sentiment_metrics.get(ts) for ts in all_timestamps]
+
+    return render_template(
+        "rag/evaluation_results.html", 
+        evaluations=evaluations,
+        chart_labels=all_timestamps,
+        chatbot_chart_values=chatbot_values,
+        sentiment_chart_values=sentiment_values
+    )

@@ -42,8 +42,7 @@
               <tr>
                 <th>파일명</th>
                 <th>컬렉션명</th>
-                <th>문서 수</th>
-                <th>작업</th>
+                <th>청크 수</th>
               </tr>
             </thead>
             <tbody>
@@ -67,14 +66,6 @@
                       <span class="badge bg-secondary">0개</span>
                     {% endif %}
                   </td>
-                  <td>
-                    <form method="post" action="{{ url_for('rag.delete_file', filename=file) }}" style="display: inline;">
-                      <button type="submit" class="btn btn-sm btn-danger"
-                              onclick="return confirm('정말로 이 파일의 컬렉션을 삭제하시겠습니까?')">
-                        <i class="fas fa-trash"></i> 삭제
-                      </button>
-                    </form>
-                  </td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -89,32 +80,7 @@
     </div>
   </div>
 
-  <!-- 컬렉션 정보 -->
-  {% if collection_names %}
-  <div class="card mt-4">
-    <div class="card-header">
-        <h4>🗄️ 전체 컬렉션 정보</h4>
-    </div>
-    <div class="card-body">
-      <div class="row">
-        <div class="col-md-6">
-          <h6>파일별 컬렉션: <span class="badge bg-success">{{ collection_info|length }}개</span></h6>
-        </div>
-        <div class="col-md-6">
-          <h6>전체 컬렉션: <span class="badge bg-info">{{ collection_names|length }}개</span></h6>
-        </div>
-      </div>
-      <details class="mt-3">
-        <summary class="btn btn-outline-secondary btn-sm">전체 컬렉션 목록 보기</summary>
-        <div class="mt-2">
-          {% for collection in collection_names %}
-            <span class="badge bg-light text-dark me-1 mb-1">{{ collection }}</span>
-          {% endfor %}
-        </div>
-      </details>
-    </div>
-  </div>
-  {% endif %}
+  
 
 </div>
 

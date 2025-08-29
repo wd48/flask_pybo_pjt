@@ -53,5 +53,25 @@
       {% endif %}
     </div>
   </div>
+
+  <!-- 전체 컬렉션 정보 -->
+  <div class="card mt-4">
+    <div class="card-header">
+        <h4>🗄️ ChromaDB 전체 컬렉션 목록</h4>
+    </div>
+    <div class="card-body">
+        <h6>총 컬렉션: <span class="badge bg-info">{{ all_collection_names|length }}개</span></h6>
+        <details class="mt-3">
+            <summary class="btn btn-outline-secondary btn-sm">전체 컬렉션 이름 보기</summary>
+            <div class="mt-2 p-2 border rounded bg-light">
+            {% for name in all_collection_names %}
+                <span class="badge bg-light text-dark me-1 mb-1 font-monospace">{{ name }}</span>
+            {% else %}
+                <p class="mb-0 text-muted">데이터베이스에 컬렉션이 없습니다.</p>
+            {% endfor %}
+            </div>
+        </details>
+    </div>
+  </div>
 </div>
 {% endblock %}

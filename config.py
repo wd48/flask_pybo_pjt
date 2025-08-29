@@ -26,6 +26,12 @@ EMBEDDING_MODEL = 'jhgan/ko-sroberta-multitask'
 LLM_MODEL = 'gemma3n:latest'  # Ollama 모델 이름
 LLM_TEMPERATURE = 0.7  # LLM 온도 설정
 
+LLM_HOST = os.getenv("OLLAMA_HOST", 'http://localhost:11434')  # Ollama 서버 호스트
+print(f" * Loading OLLAMA_HOST: {LLM_HOST}")
+CHROMA_HOST = os.getenv('CHROMA_HOST', 'localhost')
+CHROMA_PORT = os.getenv('CHROMA_PORT', '8000')
+print(f" * Loading CHROMA: {CHROMA_HOST}:{CHROMA_PORT}")
+
 # 챗봇 업로드 폴더 설정
 if not os.path.exists(CHAT_UPLOAD_FOLDER):
     os.makedirs(CHAT_UPLOAD_FOLDER)

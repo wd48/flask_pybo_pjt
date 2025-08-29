@@ -4,6 +4,15 @@
 <div class="container mt-5">
     <h2 class="mb-4">📊 답변 평가 결과 목록</h2>
 
+    <div class="card mb-4">
+        <div class="card-header">
+            응답 속도 비교 (초)
+        </div>
+        <div class="card-body">
+            <canvas id="performanceComparisonChart"></canvas>
+        </div>
+    </div>
+
     <div class="accordion" id="evaluationAccordion">
         {% for eval in evaluations %}
         <div class="accordion-item">
@@ -66,4 +75,54 @@
         {% endfor %}
     </div>
 </div>
+{% endblock %}
+
+{% block script %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('performanceComparisonChart');
+    if (ctx) {
+        new Chart(ctx.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: {{ chart_labels|tojson }},
+                datasets: [
+                    {
+                        label: '챗봇 응답 시간 (초)',
+                        data: {{ chatbot_chart_values|tojson }},
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        fill: false,
+                        spanGaps: true, // 데이터가 없는 부분을 선으로 연결
+                    },
+                    {
+                        label: '감정 분석 응답 시간 (초)',
+                        data: {{ sentiment_chart_values|tojson }},
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        fill: false,
+                        spanGaps: true, // 데이터가 없는 부분을 선으로 연결
+                    }
+                ]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                },
+                responsive: true,
+                maintainAspectRatio: true
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

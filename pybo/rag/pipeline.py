@@ -24,6 +24,7 @@ from flask import current_app
 from langchain.chains import LLMChain, RetrievalQA, create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.prompts import PromptTemplate
+from langchain_community.llms import Ollama
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from . import models, vectorstore
@@ -64,33 +65,50 @@ def get_qa_chain(retriever):
     return qa_chain
 
 # 감정 분석 체인을 가져오는 함수
-def get_sentiment_chain():
-    global sentiment_chain
-    if sentiment_chain is None:
-        sentiment_prompt = PromptTemplate(
-            input_variables=["gender", "age", "emotion", "meaning", "action", "reflect", "anchor"],
-            template="""
-                당신은 사용자의 감정 기록을 분석하는 전문 상담가입니다. 사용자의 다음 기록을 바탕으로 감정 상태를 진단하고, 행동이 어떤 의미를 가지는지 분석하여 정확하고 적절한 답변을 제공하세요.
+def get_sentiment_chain(config: dict):
+    """
+    감정 분석을 위한 전용, 결정론적 LLM 체인을 생성하고 반환합니다.
+    일관된 답변 형태를 위해 별도의 LLM 인스턴스(temperature=0.1)를 사용하고,
+    프롬프트에 명시적인 출력 형식을 지정합니다.
+    """
+    # 1. 일관된 답변을 위해 전용 LLM 인스턴스 생성 (낮은 temperature)
+    sentiment_llm = Ollama(
+        base_url=config["LLM_HOST"],
+        model=config["LLM_MODEL"],
+        temperature=0.1  # 응답의 일관성을 위해 온도를 낮게 설정
+    )
 
-                --- 감정 기록 ---
-                성별: {gender}
-                연령대: {age}
-                걷기 전 감정: {emotion}
-                감정을 느낀 이유: {meaning}
-                도움이 된 행동: {action}
-                행동 후 긍정적인 변화: {reflect}
-                오늘의 한마디: {anchor}
-                ---
+    # 2. 명확한 출력 형식을 지정하는 프롬프트
+    sentiment_prompt = PromptTemplate(
+        input_variables=["gender", "age", "emotion", "meaning", "action", "reflect", "anchor"],
+        template="""
+            당신은 사용자의 감정 기록을 분석하는 전문 심리 상담가입니다. 사용자의 기록을 바탕으로 아래 형식에 맞춰 답변을 생성해 주세요.
 
-                위 기록을 바탕으로 분석하고 답변해 주세요.
-            """
-        )
+            --- 감정 기록 ---
+            - 성별: {gender}
+            - 연령대: {age}
+            - 걷기 전 감정: {emotion}
+            - 감정을 느낀 이유: {meaning}
+            - 도움이 된 행동: {action}
+            - 행동 후 긍정적인 변화: {reflect}
+            - 오늘의 한마디: {anchor}
+            ---
 
-        sentiment_chain = LLMChain(
-            llm=models.get_llm(),
-            prompt=sentiment_prompt
-        )
-    print(f"[-RAG-] get_sentiment_chain() initialized with LLM: {current_app.config['LLM_MODEL']}")
+            --- 분석 답변 형식 ---
+            1.  **감정 진단**: [사용자의 감정 상태에 대한 진단]
+            2.  **행동 분석**: [기록된 행동의 의미와 효과에 대한 분석]
+            3.  **전문가 제언**: [상담가로서의 조언이나 격려]
+            ---
+
+            위 '분석 답변 형식'에 맞춰서만 답변을 작성해 주세요.
+        """
+    )
+
+    sentiment_chain = LLMChain(
+        llm=sentiment_llm,
+        prompt=sentiment_prompt
+    )
+    print(f"[-RAG-] Initialized dedicated sentiment chain with LLM: {config['LLM_MODEL']} (temp=0.1)")
     return sentiment_chain
 
 # 대화형 RAG 체인 생성 함수, 2025-08-27 jylee
@@ -192,7 +210,7 @@ def run_llm_chain(query, retriever):
     start_time = time.time()
     result = chain.invoke({"query": query})
     end_time = time.time()
-    log_chatbot_response_time(end_time - start_time)
+    log_chatbot_response_time(end_time - start_time, source="챗봇")
     print(f"[-RAG-] run_llm_chain() result: {result}")
     return result["result"]
 
@@ -212,7 +230,7 @@ def analyze_sentiment(gender: str, age: str, emotion: str, meaning: str, action:
         anchor=anchor
     )
     end_time = time.time()
-    log_chatbot_response_time(end_time - start_time)
+    log_chatbot_response_time(end_time - start_time, source="감정 분석")
 
     # LLM 응답을 파싱하여 감정 분류를 추출
     sentiment_class = "분류불가"
@@ -223,14 +241,26 @@ def analyze_sentiment(gender: str, age: str, emotion: str, meaning: str, action:
     elif "중립(Neutral)" in response:
         sentiment_class = "중립(Neutral)"
 
-    # 결과에서 감정 분류를 추출하여 로그
-    # 예시로 'Positive', 'Negative', 'Neutral' 중 하나로 가정
-    # LLM이 분류한 감정 클래스를 직접 파싱하는 로직이 필요
-    # LLM 응답을 파싱하여 실제 감정 분류를 추출해야 함
-    # 이 부분은 LLM의 응답 형식을 보고 적절히 파싱하여 수정해야 합니다.
-    # log_sentiment_result(sentiment_class)
-
     return response
+
+# 감정 분석 스트리밍 함수, 2025-08-29 jylee
+def analyze_sentiment_stream(config: dict, gender: str, age: str, emotion: str, meaning: str, action: str, reflect: str, anchor: str):
+    """감정 분석을 스트리밍 방식으로 처리하고, 생성되는 텍스트 조각을 반환하며 응답 시간을 기록합니다."""
+    start_time = time.time()
+    chain = get_sentiment_chain(config)
+    print(f"[-RAG-] Streaming sentiment analysis for emotional record")
+    
+    input_data = {
+        "gender": gender, "age": age, "emotion": emotion, "meaning": meaning,
+        "action": action, "reflect": reflect, "anchor": anchor
+    }
+    
+    for chunk in chain.stream(input_data):
+        yield chunk.get('text', '')
+    
+    end_time = time.time()
+    log_chatbot_response_time(end_time - start_time, source="감정 분석")
+
 
 # 텍스트 요약 함수, 2025-08-19 jylee
 def summarize_text(text_to_summarize: str) -> str:

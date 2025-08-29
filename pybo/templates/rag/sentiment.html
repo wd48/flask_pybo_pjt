@@ -2,7 +2,7 @@
 {% block content %}
 <div class="container mt-5">
   <h3>감정 기록 분석</h3>
-    <form method="POST">
+    <form id="sentiment-form" method="POST">
         <div class="mb-3">
             <label class="form-label">성별은 어떻게 되십니까?</label>
             <div>
@@ -110,68 +110,94 @@
         <button type="submit" class="btn btn-primary mt-2">분석</button>
     </form>
 
-    {% if result %}
-        <div class="mt-4 p-3 border rounded bg-light">
-            <strong>감정 분석 결과:</strong>
-            <div id="result-content" style="padding: 1em; border-radius: 0.5em;">{{ result|safe }}</div>
-        </div>
-    {% endif %}
-
-    <hr class="my-5">
-
-    <h3>성능 대시보드</h3>
-    <div class="row">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">챗봇 응답 시간</div>
-                <div class="card-body">
-                    <canvas id="chatbotPerformanceChart"></canvas>
-                </div>
-            </div>
-        </div>
+    <div id="result-container" class="mt-4 p-3 border rounded bg-light" style="display: none;">
+        <strong>감정 분석 결과:</strong>
+        <div id="result-content" style="padding: 1em; border-radius: 0.5em; white-space: pre-wrap;"></div>
     </div>
 </div>
 {% endblock %}
 {% block script %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/simplemde@1.11.2/dist/simplemde.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/simplemde@1.11.2/dist/simplemde.min.css">
 <script>
-    {% if result %}
-    // 마크다운 결과 렌더링
     document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('sentiment-form');
+        const resultContainer = document.getElementById('result-container');
         const resultContent = document.getElementById('result-content');
-        if (resultContent) {
-            // SimpleMDE의 마크다운 파서를 사용하여 결과를 HTML로 변환
-            const markdown = `{{ result|replace('\n', '\\n')|replace('"', '\"') }}`;
-            resultContent.innerHTML = SimpleMDE.prototype.markdown(markdown);
-        }
-    });
-    {% endif %}
+        let eventSource;
 
-    document.addEventListener('DOMContentLoaded', function() {
-        // Chatbot Performance Chart
-        const chatbotCtx = document.getElementById('chatbotPerformanceChart');
-        if (chatbotCtx) {
-            new Chart(chatbotCtx.getContext('2d'), {
-                type: 'line',
-                data: {
-                    labels: {{ chatbot_labels|tojson }},
-                    datasets: [{
-                        label: '응답 시간 (초)',
-                        data: {{ chatbot_values|tojson }},
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        fill: true,
-                    }]
-                },
-                options: {
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            const formData = new FormData(form);
+            const params = new URLSearchParams(formData);
+
+            resultContent.innerHTML = '분석 중입니다. 잠시만 기다려 주세요...';
+            resultContainer.style.display = 'block';
+
+            eventSource = new EventSource(`{{ url_for('rag.sentiment_analysis') }}?${params.toString()}`);
+
+            let fullContent = '';
+
+            // 1. 타이핑 효과 구현
+            eventSource.onmessage = function(event) {
+                // 첫 토큰 수신 시, "분석 중" 메시지 제거
+                if (resultContent.innerHTML.includes('분석 중')) {
+                    resultContent.innerHTML = '';
                 }
+                const token = JSON.parse(event.data);
+                fullContent += token;
+                // 받은 텍스트 조각을 그대로 이어 붙여 타이핑 효과를 냅니다.
+                resultContent.appendChild(document.createTextNode(token));
+            };
+
+            // 2. 스트림 종료 시 최종 처리
+            eventSource.addEventListener('end', function(event) {
+                eventSource.close();
+                
+                // 3. 완성된 전체 텍스트를 Markdown으로 최종 렌더링
+                resultContent.innerHTML = SimpleMDE.prototype.markdown(fullContent);
+
+                // 4. 완성된 답변으로 로그 기록
+                const logData = {
+                    gender: formData.get('gender'),
+                    age: formData.get('age'),
+                    emotion: formData.get('emotion'),
+                    meaning: formData.get('meaning'),
+                    action: formData.getAll('action').join(', ') || '없음',
+                    reflect: formData.getAll('reflect').join(', ') || '없음',
+                    anchor: formData.get('anchor'),
+                    result: fullContent
+                };
+
+                fetch("{{ url_for('rag.log_sentiment_result') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(logData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if(data.status === 'success') {
+                        console.log('Sentiment log saved successfully.');
+                    } else {
+                        console.error('Failed to save sentiment log:', data.message);
+                    }
+                })
+                .catch(error => console.error('Error saving sentiment log:', error));
             });
-        }
+
+            eventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                resultContent.innerHTML += "\n\n[오류: 서버와 연결이 끊어졌습니다.]";
+                eventSource.close();
+            };
+        });
     });
 </script>
 {% endblock %}

@@ -17,11 +17,13 @@ def get_persistent_client():
     global persistent_client_instance
     if persistent_client_instance is None:
         try:
-            print(f"[-RAG-] Initializing ChromaDB PersistentClient at {current_app.config['CHAT_DB_PERSIST_DIR']}")
-            persistent_client_instance = chromadb.PersistentClient(current_app.config["CHAT_DB_PERSIST_DIR"])
+            # ❗️ HttpClient가 host와 port를 config에서 읽어오는지 확인
+            persistent_client_instance = chromadb.HttpClient(
+                host=current_app.config["CHROMA_HOST"],
+                port=current_app.config["CHROMA_PORT"]
+            )
         except Exception as e:
-            print(f"[-RAG-] Error initializing ChromaDB PersistentClient: {e}")
-            # 오류 발생 시 None을 반환하거나 적절한 오류 처리를 할 수 있습니다.
+            print(f"[-RAG-] Error connecting to ChromaDB server: {e}")
             return None
     return persistent_client_instance
 
@@ -98,22 +100,19 @@ def _create_vectordb_instance(docs=None, collection_name=None):
     embedding_function = models.get_embedding_model()
 
     if docs is not None:
-        # 문서로부터 새로운 vectordb 생성
-        # langchain-chroma의 Chroma 객체에 관리하는 client를 명시적으로 전달, 2025-08-25 jylee
+        # ❗️ HttpClient를 사용하므로 persist_directory 인자는 불필요
         return Chroma.from_documents(
             documents=docs,
             embedding=embedding_function,
-            persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
             collection_name=collection_name,
-            client=client   # 중앙화된 클라이언트를 사용, 2025-08-25 jylee
+            client=client
         )
     else:
-        # 기존 컬렉션 로드
+        # ❗️ HttpClient를 사용하므로 persist_directory 인자는 불필요
         return Chroma(
             embedding_function=embedding_function,
-            persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
             collection_name=collection_name,
-            client=client  # 중앙화된 클라이언트를 사용, 2025-08-25 jylee
+            client=client
         )
 
 # 파일별 벡터 데이터베이스를 생성하는 함수, 2025-08-19 jylee
