@@ -3,10 +3,15 @@ import os
 from flask import current_app
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.llms import Ollama
+from dotenv import load_dotenv
 
 # 전역 모델 변수
 embedding_model = None
 llm = None
+
+# cuda/cpu 환경변수 적용,2025-09-02 jylee
+load_dotenv()
+gpu_mode = os.getenv("USE_CUDA")
 
 # 임베딩 모델 호출, 2025-08-21 jylee
 def get_embedding_model():
@@ -16,8 +21,13 @@ def get_embedding_model():
         # 모델의 로컬 경로를 지정합니다.
         model_path = os.path.join(current_app.root_path, "..", "local_models", "jhgan_ko-sroberta-multitask")
         print(f"[-RAG-] Initializing embedding model from local path: {model_path}")
+
+        # 모델이 GPU('cuda')를 사용하도록 명시적으로 지정합니다.
+        model_kwargs = {'device': gpu_mode}
+
         embedding_model = HuggingFaceEmbeddings(
-            model_name=model_path
+            model_name=model_path,
+            model_kwargs=model_kwargs
         )
     return embedding_model
 
