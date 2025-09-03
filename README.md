@@ -10,7 +10,7 @@
   - LLM : google/gemma-3n-E2B-it [huggingFace](https://huggingface.co/google/gemma-3n-E2B-it)
 - evaluation
   - [HF RAG evaluation](https://huggingface.co/learn/cookbook/en/rag_evaluation)
-  - [langFuse](https://langfuse.com/kr)
+  - [langFuse](https://langfuse.com/kr) [LangFuse Platform Demo](https://youtube.com/playlist?list=PL4v4zZF1rGG6Bmt3dgtQc31Byzy97t0xr&si=h5bf20NTPgS_sOyC)
 
 # reference
 - [flask](https://wikidocs.net/81044)
