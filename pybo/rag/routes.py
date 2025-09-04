@@ -21,6 +21,27 @@ from .vectorstore import get_persistent_client, get_all_file_collections
 
 bp = Blueprint("rag", __name__, url_prefix="/chat")
 
+# 평가기 캐싱을 위한 전역 변수
+relevance_evaluator = None
+conciseness_evaluator = None
+correctness_evaluator = None
+
+# 백그라운드 스레드에서 평가 실행 함수, 2025-09-04 jylee
+def run_eval_in_background(app, question: str, prediction: str):
+    """백그라운드 스레드에서 평가를 실행합니다."""
+    with app.app_context():
+        run_and_log_evaluation(question=question, prediction=prediction)
+
+# 백그라운드 스레드 시작 함수, 2025-09-04 jylee
+def start_evaluation_in_background(question: str, prediction: str):
+    """평가 함수를 백그라운드 스레드에서 실행을 시작합니다."""
+    app = current_app._get_current_object()
+    eval_thread = threading.Thread(
+        target=run_eval_in_background,
+        args=(app, question, prediction)
+    )
+    eval_thread.start()
+
 # ====== 라우팅 ======
 @bp.route("/", methods=["GET"])
 def index():
@@ -94,26 +115,14 @@ def ask():
     log_chatbot_response_time(end_time - start_time, source="챗봇")
     print(f"--- RAG chain result: {result} ---")
 
-    # 답변 생성 후 평가를 백그라운드에서 실행하여 응답 지연 방지, 2025-09-03 Gemini
-    app = current_app._get_current_object()
-    eval_thread = threading.Thread(
-        target=run_eval_in_background,
-        args=(app, question, answer)
-    )
-    eval_thread.start()
+    # 답변 생성 후 평가를 백그라운드에서 실행하여 응답 지연 방지, 2025-09-04 jylee
+    start_evaluation_in_background(question, answer)
 
     # 세션저장.
     session['chat_history'].append({"role": "bot", "content": answer})
     session.modified = True
 
     return jsonify({"answer": answer})
-
-# 챗봇 평가 스레드 실행 함수, 2025-09-03 jylee
-def run_eval_in_background(app, question: str, prediction: str):
-    """백그라운드 스레드에서 평가를 실행합니다."""
-    with app.app_context():
-        run_and_log_evaluation(question=question, prediction=prediction)
-
 
 # 챗봇 대화 기록을 초기화하는 엔드포인트
 @bp.route("/clear", methods=["POST"])
@@ -284,8 +293,8 @@ def log_sentiment_result():
         # 원본 질문 구성
         sentiment_question = f"성별: {data['gender']}, 연령대: {data['age']}, 감정: {data['emotion']}, 이유: {data['meaning']}, 행동: {data['action']}, 성찰: {data['reflect']}, 다짐: {data['anchor']}"
         
-        # 평가 및 로그 실행
-        run_and_log_evaluation(question=sentiment_question, prediction=data['result'])
+        # 평가 및 로그 실행 (백그라운드에서 실행), 2025-09-04 jylee
+        start_evaluation_in_background(sentiment_question, data['result'])
 
         # 기존 로그 저장 로직
         log_entry = {
@@ -326,16 +335,21 @@ def performance_dashboard():
 
 
 # ====== 평가 공통 함수 ======
-# # 평가를 실행하고 결과를 JSON 파일로 저장합니다.
+# 평가를 실행하고 결과를 JSON 파일로 저장합니다.
 def run_and_log_evaluation(question: str, prediction: str, reference: str = None):
     """답변을 평가하고, 결과를 JSON 파일로 저장한 후, 평가 결과를 반환합니다."""
+    global relevance_evaluator, conciseness_evaluator, correctness_evaluator
     print(f"--- Starting evaluation for question: '{question[:50]}...' ---")
     try:
         llm = get_llm()
 
-        # 평가기 로드
-        relevance_evaluator = load_evaluator("criteria", criteria="relevance", llm=llm)
-        conciseness_evaluator = load_evaluator("criteria", criteria="conciseness", llm=llm)
+        # 평가기 캐싱: 최초 호출 시에만 로드
+        if relevance_evaluator is None:
+            print("--- Initializing relevance evaluator ---")
+            relevance_evaluator = load_evaluator("criteria", criteria="relevance", llm=llm)
+        if conciseness_evaluator is None:
+            print("--- Initializing conciseness evaluator ---")
+            conciseness_evaluator = load_evaluator("criteria", criteria="conciseness", llm=llm)
 
         eval_results = {}
 
@@ -349,7 +363,9 @@ def run_and_log_evaluation(question: str, prediction: str, reference: str = None
 
         # 정확성 평가 (reference가 있을 경우)
         if reference:
-            correctness_evaluator = load_evaluator("qa", llm=llm)
+            if correctness_evaluator is None:
+                print("--- Initializing correctness evaluator ---")
+                correctness_evaluator = load_evaluator("qa", llm=llm)
             correctness_result = correctness_evaluator.evaluate_strings(
                 prediction=prediction, reference=reference, input=question
             )
