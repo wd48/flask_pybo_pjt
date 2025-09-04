@@ -1,23 +1,23 @@
 # pybo/rag/routes.py
-import os
 import json
+import os
+import threading
 import time
 from datetime import datetime
+
 from flask import Blueprint, render_template, request, url_for, redirect, flash, jsonify, session, current_app, Response
 from langchain.evaluation import load_evaluator
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.messages import HumanMessage, AIMessage
-from .pipeline import ask_rag, run_llm_chain, analyze_sentiment, summarize_text, get_conversational_rag_chain, analyze_sentiment_stream
+
+from .metrics import get_chatbot_metrics, log_chatbot_response_time
+from .models import get_llm
+from .pipeline import summarize_text, get_conversational_rag_chain, analyze_sentiment_stream
 from .upload_utils import (
     save_pdf_and_index, list_uploaded_pdfs, get_pdf_retriever,
     get_collection_names, get_file_collection_info, delete_collection_and_file
 )
-from .metrics import get_chatbot_metrics, log_chatbot_response_time
-from .models import get_llm
 from .vectorstore import get_persistent_client, get_all_file_collections
-
-import chromadb
-from chromadb.api.models.Collection import Collection
 
 bp = Blueprint("rag", __name__, url_prefix="/chat")
 
@@ -94,15 +94,26 @@ def ask():
     log_chatbot_response_time(end_time - start_time, source="챗봇")
     print(f"--- RAG chain result: {result} ---")
 
-    # 답변 생성 후 평가 실행 및 로그 저장, 2025-08-22 jylee
-    # 평가 기준이 있다면 reference를 제공할 수 있습니다.
-    run_and_log_evaluation(question=question, prediction=answer)
+    # 답변 생성 후 평가를 백그라운드에서 실행하여 응답 지연 방지, 2025-09-03 Gemini
+    app = current_app._get_current_object()
+    eval_thread = threading.Thread(
+        target=run_eval_in_background,
+        args=(app, question, answer)
+    )
+    eval_thread.start()
 
     # 세션저장.
     session['chat_history'].append({"role": "bot", "content": answer})
     session.modified = True
 
     return jsonify({"answer": answer})
+
+# 챗봇 평가 스레드 실행 함수, 2025-09-03 jylee
+def run_eval_in_background(app, question: str, prediction: str):
+    """백그라운드 스레드에서 평가를 실행합니다."""
+    with app.app_context():
+        run_and_log_evaluation(question=question, prediction=prediction)
+
 
 # 챗봇 대화 기록을 초기화하는 엔드포인트
 @bp.route("/clear", methods=["POST"])
