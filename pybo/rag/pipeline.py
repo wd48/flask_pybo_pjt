@@ -67,7 +67,7 @@ def get_qa_chain(retriever):
     print(f"[-RAG-] QA chain created with LLM: {current_app.config['LLM_MODEL']}")
     return qa_chain
 
-# 감정 분석 체인을 가져오는 함수 (RAG 기반 및 로깅 기능 추가, 2025-09-04 Gemini)
+# 감정 분석 체인을 가져오는 함수 (RAG 기반 및 로깅 기능 추가, 2025-09-04 jylee)
 def get_sentiment_chain(config: dict):
     """
     RAG 기반의 감정 분석 체인을 생성하고 반환합니다.
@@ -283,7 +283,7 @@ def analyze_sentiment(gender: str, age: str, emotion: str, meaning: str, action:
 
     return response
 
-# 감정 분석 스트리밍 함수 (RAG 기반 및 로깅 기능 추가, 2025-09-04 Gemini)
+# 감정 분석 스트리밍 함수 (RAG 기반 및 로깅 기능 추가, 2025-09-04 jylee)
 def analyze_sentiment_stream(config: dict, gender: str, age: str, emotion: str, meaning: str, action: str, reflect: str, anchor: str):
     """감정 분석을 스트리밍 방식으로 처리하고, 생성되는 텍스트 조각을 반환하며 응답 시간을 기록합니다."""
     start_time = time.time()

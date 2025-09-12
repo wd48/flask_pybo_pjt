@@ -13,7 +13,7 @@ llm = None
 # .env 파일 로드
 load_dotenv()
 
-# 임베딩 모델 호출, 2025-08-21 jylee (CUDA 자동 감지 기능 추가, 2025-09-03 Gemini)
+# 임베딩 모델 호출, 2025-08-21 jylee (CUDA 자동 감지 기능 추가, 2025-09-03 jylee)
 def get_embedding_model():
     """임베딩 모델을 로드하고 반환합니다. 모델이 이미 로드된 경우 기존 객체를 반환합니다."""
     global embedding_model
