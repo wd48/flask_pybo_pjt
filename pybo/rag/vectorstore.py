@@ -159,6 +159,35 @@ def get_file_vectordb(filename: str):
 def get_all_file_collections():
     return file_collections
 
+# 지식 베이스 컬렉션에서 retriever를 생성하는 함수, 2025-09-12 jylee
+def get_kb_retriever(k: int = 3):
+    """지식 베이스('sentiment_kb') 컬렉션에서 retriever를 생성합니다."""
+    try:
+        client = get_persistent_client()
+        collection_name = "sentiment_kb"
+        
+        # 진단을 위해 컬렉션의 문서 수를 로그로 출력, 2025-09-12 jylee
+        try:
+            collection = client.get_collection(name=collection_name)
+            print(f"--- [KB Retriever] Found '{collection_name}' collection with {collection.count()} documents. ---")
+        except Exception as e:
+            print(f"--- [KB Retriever] Could not get collection '{collection_name}'. It might not exist yet. Error: {e} ---")
+            # 컬렉션이 없어도 오류를 발생시키지 않고 계속 진행 (어차피 retriever가 비어있을 것)
+
+        embedding_function = models.get_embedding_model()
+
+        # ChromaDB 컬렉션에서 retriever 생성
+        vectordb = Chroma(
+            client=client,
+            collection_name=collection_name,
+            embedding_function=embedding_function
+        )
+        
+        return vectordb.as_retriever(search_kwargs={"k": k})
+    except Exception as e:
+        print(f"Error creating KB retriever: {e}")
+        return None
+
 # 파일 컬렉션을 삭제하는 함수
 def delete_file_collection(filename: str):
     """특정 파일의 컬렉션을 삭제합니다."""

@@ -21,11 +21,14 @@ import os
 import time
 from dotenv import load_dotenv
 from flask import current_app
+from operator import itemgetter
 from langchain.chains import LLMChain, RetrievalQA, create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.prompts import PromptTemplate
 from langchain_community.llms import Ollama
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 
 from . import models, vectorstore
 from .metrics import log_chatbot_response_time
@@ -64,25 +67,32 @@ def get_qa_chain(retriever):
     print(f"[-RAG-] QA chain created with LLM: {current_app.config['LLM_MODEL']}")
     return qa_chain
 
-# 감정 분석 체인을 가져오는 함수
+# 감정 분석 체인을 가져오는 함수 (RAG 기반 및 로깅 기능 추가, 2025-09-04 Gemini)
 def get_sentiment_chain(config: dict):
     """
-    감정 분석을 위한 전용, 결정론적 LLM 체인을 생성하고 반환합니다.
-    일관된 답변 형태를 위해 별도의 LLM 인스턴스(temperature=0.1)를 사용하고,
-    프롬프트에 명시적인 출력 형식을 지정합니다.
+    RAG 기반의 감정 분석 체인을 생성하고 반환합니다.
+    전문가 지식 베이스에서 관련 정보를 검색하여, 이를 바탕으로 LLM이 답변을 생성합니다.
     """
     # 1. 일관된 답변을 위해 전용 LLM 인스턴스 생성 (낮은 temperature)
     sentiment_llm = Ollama(
         base_url=config["LLM_HOST"],
         model=config["LLM_MODEL"],
-        temperature=0.1  # 응답의 일관성을 위해 온도를 낮게 설정
+        temperature=0.1
     )
 
-    # 2. 명확한 출력 형식을 지정하는 프롬프트
+    # 2. 지식 베이스를 검색하기 위한 Retriever 가져오기
+    retriever = vectorstore.get_kb_retriever(k=2) # 관련성 높은 2개 문서 검색
+
+    # 3. 새로운 RAG 프롬프트 템플릿
     sentiment_prompt = PromptTemplate(
-        input_variables=["gender", "age", "emotion", "meaning", "action", "reflect", "anchor"],
+        input_variables=["context", "gender", "age", "emotion", "meaning", "action", "reflect", "anchor"],
         template="""
-            당신은 사용자의 감정 기록을 분석하는 전문 심리 상담가입니다. 사용자의 기록을 바탕으로 아래 형식에 맞춰 답변을 생성해 주세요.
+            당신은 사용자의 감정 기록을 분석하는 전문 심리 상담가입니다.
+            주어진 [전문가 조언]을 반드시 참고하여, 사용자의 기록을 바탕으로 아래 형식에 맞춰 답변을 생성해 주세요.
+
+            --- 전문가 조언 ---
+            {context}
+            --- END OF ADVICE ---
 
             --- 감정 기록 ---
             - 성별: {gender}
@@ -97,19 +107,49 @@ def get_sentiment_chain(config: dict):
             --- 분석 답변 형식 ---
             1.  **감정 진단**: [사용자의 감정 상태에 대한 진단]
             2.  **행동 분석**: [기록된 행동의 의미와 효과에 대한 분석]
-            3.  **전문가 제언**: [상담가로서의 조언이나 격려]
+            3.  **전문가 제언**: [전문가 조언(context)을 바탕으로 한 상담가로서의 조언이나 격려]
             ---
 
             위 '분석 답변 형식'에 맞춰서만 답변을 작성해 주세요.
         """
     )
 
-    sentiment_chain = LLMChain(
-        llm=sentiment_llm,
-        prompt=sentiment_prompt
+    # 4. RAG 체인 구성 (LCEL 방식) 및 로깅 추가
+    def log_and_format_docs(docs):
+        print("\n--- [RAG Sentiment Analysis] Retrieved Context: ---")
+        if not docs:
+            print("No relevant context found in Knowledge Base.")
+            return "참고할 전문가 조언을 찾지 못했습니다."
+        
+        for doc in docs:
+            source = doc.metadata.get('filename', 'N/A')
+            content_preview = doc.page_content.replace('\n', ' ')[:100]
+            print(f"  - SOURCE: {source}")
+            print(f"    CONTENT: {content_preview}...\n")
+        print("-----------------------------------------------------\
+")
+        return "\n\n".join(doc.page_content for doc in docs)
+
+    rag_chain = (
+        {
+            "context": itemgetter("query") | retriever | log_and_format_docs,
+            "gender": itemgetter("gender"),
+            "age": itemgetter("age"),
+            "emotion": itemgetter("emotion"),
+            "meaning": itemgetter("meaning"),
+            "action": itemgetter("action"),
+            "reflect": itemgetter("reflect"),
+            "anchor": itemgetter("anchor")
+        }
+        | sentiment_prompt
+        | sentiment_llm
+        | StrOutputParser()
     )
-    print(f"[-RAG-] Initialized dedicated sentiment chain with LLM: {config['LLM_MODEL']} (temp=0.1)")
-    return sentiment_chain
+
+    print(f"[-RAG-] Initialized RAG-based sentiment chain with LLM: {config['LLM_MODEL']}")
+    return rag_chain
+
+
 
 # 대화형 RAG 체인 생성 함수, 2025-08-27 jylee
 def get_conversational_rag_chain(retriever):
@@ -243,20 +283,25 @@ def analyze_sentiment(gender: str, age: str, emotion: str, meaning: str, action:
 
     return response
 
-# 감정 분석 스트리밍 함수, 2025-08-29 jylee
+# 감정 분석 스트리밍 함수 (RAG 기반 및 로깅 기능 추가, 2025-09-04 Gemini)
 def analyze_sentiment_stream(config: dict, gender: str, age: str, emotion: str, meaning: str, action: str, reflect: str, anchor: str):
     """감정 분석을 스트리밍 방식으로 처리하고, 생성되는 텍스트 조각을 반환하며 응답 시간을 기록합니다."""
     start_time = time.time()
     chain = get_sentiment_chain(config)
-    print(f"[-RAG-] Streaming sentiment analysis for emotional record")
     
+    # 사용자 입력을 RAG 체인에 맞는 딕셔너리 형태로 구성, 2025-09-12 jylee
     input_data = {
         "gender": gender, "age": age, "emotion": emotion, "meaning": meaning,
         "action": action, "reflect": reflect, "anchor": anchor
     }
-    
+    # 사용자 입력 중 검색어(query)로 사용할 텍스트를 조합하여 딕셔너리에 추가, 2025-09-12 jylee
+    query = f"{emotion} 감정의 이유: {meaning}, 오늘의 다짐: {anchor}"
+    input_data["query"] = query
+    print(f"--- [RAG Sentiment Analysis] Query: {query} ---")
+
+    # 스트리밍 시작, 2025-09-12 jylee
     for chunk in chain.stream(input_data):
-        yield chunk.get('text', '')
+        yield chunk
     
     end_time = time.time()
     log_chatbot_response_time(end_time - start_time, source="감정 분석")

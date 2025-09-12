@@ -15,7 +15,8 @@ from .models import get_llm
 from .pipeline import summarize_text, get_conversational_rag_chain, analyze_sentiment_stream
 from .upload_utils import (
     save_pdf_and_index, list_uploaded_pdfs, get_pdf_retriever,
-    get_collection_names, get_file_collection_info, delete_collection_and_file
+    get_collection_names, get_file_collection_info, delete_collection_and_file,
+    save_kb_and_index, list_uploaded_kbs, delete_kb_collection_and_file
 )
 from .vectorstore import get_persistent_client, get_all_file_collections
 
@@ -197,6 +198,33 @@ def manage_files():
                            collection_info=collection_info,
                            collection_names=collection_names)
 
+# 지식 베이스 관리 페이지, 2025-09-12 jylee
+@bp.route("/kb", methods=['GET', 'POST'])
+def manage_kb():
+    if request.method == 'POST':
+        if 'kb_file' not in request.files:
+            flash("선택된 파일이 없습니다.")
+            return redirect(request.url)
+        file = request.files['kb_file']
+        if file.filename == '':
+            flash("선택된 파일이 없습니다.")
+            return redirect(request.url)
+        
+        if file and (file.filename.endswith('.pdf') or file.filename.endswith('.txt')):
+            try:
+                chunk_count = save_kb_and_index(file)
+                flash(f"지식 베이스 파일 '{file.filename}'이 성공적으로 업로드 및 인덱싱되었습니다. ({chunk_count}개 청크)")
+            except Exception as e:
+                flash(f"지식 베이스 파일 업로드 중 오류 발생: {e}")
+        else:
+            flash("PDF 또는 TXT 파일만 업로드할 수 있습니다.")
+        return redirect(url_for('rag.manage_kb'))
+
+    # GET 요청
+    kb_files = list_uploaded_kbs()
+    return render_template('rag/manage_kb.html', files=kb_files)
+
+
 # 파일 삭제 엔드포인트
 @bp.route("/files/delete/<filename>", methods=['POST'])
 def delete_file(filename):
@@ -213,6 +241,19 @@ def delete_file(filename):
         flash(f"삭제 중 오류가 발생했습니다: {str(e)}")
     
     return redirect(url_for('rag.manage_files'))
+
+# 지식 베이스 파일 삭제 엔드포인트, 2025-09-12 jylee
+@bp.route("/kb/delete/<filename>", methods=['POST'])
+def delete_kb_file(filename):
+    try:
+        if delete_kb_collection_and_file(filename):
+            flash(f"지식 베이스 파일 '{filename}'이 성공적으로 삭제되었습니다.")
+        else:
+            flash(f"지식 베이스 파일 '{filename}' 삭제에 실패했습니다.")
+    except Exception as e:
+        flash(f"지식 베이스 파일 삭제 중 오류 발생: {e}")
+    return redirect(url_for('rag.manage_kb'))
+
 
 # 설정 페이지 및 컬렉션 관리
 @bp.route('/settings')
@@ -270,10 +311,14 @@ def sentiment_analysis():
         config = current_app.config.copy()
 
         def generate_stream():
+            # RAG 기반 스트리밍 함수는 전체 입력을 하나의 딕셔너리로 받음
+            input_data = {
+                "gender": gender, "age": age, "emotion": emotion, "meaning": meaning,
+                "action": action, "reflect": reflect, "anchor": anchor
+            }
             stream = analyze_sentiment_stream(
                 config=config,
-                gender=gender, age=age, emotion=emotion, meaning=meaning,
-                action=action, reflect=reflect, anchor=anchor
+                **input_data
             )
             for chunk in stream:
                 yield f"data: {json.dumps(chunk)}\n\n"

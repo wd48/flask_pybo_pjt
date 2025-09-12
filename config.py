@@ -16,7 +16,8 @@ MAIL_PASSWORD = 'cqhrxejbajsqodqb'      # 앱 비밀번호로 변경 필요
 MAIL_DEFAULT_SENDER = 'kastrio.work@gmail.com'
 
 # 챗봇 관련 설정, 2025-08-12 jylee
-CHAT_UPLOAD_FOLDER = 'uploads'  # 챗봇 업로드 폴더
+CHAT_UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
+KB_UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads/sentiment_kb')  # 챗봇 업로드 폴더 (감정분석 지식 베이스 참고용), 2025-09-12 jylee
 CHAT_DB_PERSIST_DIR = 'chroma_db'   # ChromaDB 저장 폴더
 
 # Embedding 모델 설정
