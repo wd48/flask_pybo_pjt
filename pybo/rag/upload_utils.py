@@ -3,7 +3,7 @@ from flask import current_app
 from typing import List, LiteralString
 from datetime import datetime
 import uuid
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from . import vectorstore
 from pybo.rag.models import (get_embedding_model)
@@ -206,4 +206,101 @@ def delete_collection_and_file(filename: str) -> bool:
         return True
     except Exception as e:
         print(f"[-RAG-] Error during deletion for {filename}: {e}")
+        return False
+
+# --- 지식 베이스(KB) 관련 함수들, 2025-09-12 jylee ---
+# 지식 베이스 파일을 저장하고 전용 컬렉션에 인덱싱하는 함수, 2025-09-12 jylee
+def save_kb_and_index(file_storage) -> int:
+    """지식 베이스 파일을 저장하고 전용 컬렉션에 인덱싱합니다."""
+    upload_folder = current_app.config["KB_UPLOAD_FOLDER"]
+    os.makedirs(upload_folder, exist_ok=True)
+    
+    # 원본 파일명 유지
+    filepath = os.path.join(upload_folder, file_storage.filename)
+    file_storage.save(filepath)
+    
+    return index_kb(filepath)
+
+# 지식 베이스 파일을 로드, 분할 후 'sentiment_kb' 컬렉션에 저장하는 함수, 2025-09-12 jylee
+def index_kb(filepath: str, chunk_size: int = 500, chunk_overlap: int = 50) -> int:
+    """지식 베이스 파일을 로드, 분할 후 'sentiment_kb' 컬렉션에 저장합니다."""
+    filename = os.path.basename(filepath)
+    
+    # 파일 확장자에 따라 다른 로더 사용
+    if filename.endswith('.pdf'):
+        loader = PyPDFLoader(filepath)
+    elif filename.endswith('.txt'):
+        loader = TextLoader(filepath, encoding='utf-8')
+    else:
+        raise ValueError("Unsupported file type for KB indexing")
+
+    pages = loader.load()
+    pages_with_content = [doc for doc in pages if doc.page_content and doc.page_content.strip()]
+    if not pages_with_content:
+        return 0
+
+    splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    docs = splitter.split_documents(pages_with_content)
+    final_docs = [doc for doc in docs if doc.page_content and doc.page_content.strip()]
+    if not final_docs:
+        return 0
+
+    for doc in final_docs:
+        doc.metadata["source"] = filepath
+        doc.metadata["filename"] = filename
+
+    # 'sentiment_kb'라는 고정된 컬렉션 이름 사용
+    collection_name = "sentiment_kb"
+    collection = vectorstore.get_persistent_client().get_or_create_collection(name=collection_name)
+
+    embedding_model = get_embedding_model()
+    batch_size = 100
+    total_chunks = len(final_docs)
+    for i in range(0, total_chunks, batch_size):
+        batch_docs = final_docs[i:i + batch_size]
+        batch_embeddings = embedding_model.embed_documents([doc.page_content for doc in batch_docs])
+        
+        # ID를 파일명과 청크 인덱스로 구성하여 고유성 보장
+        ids = [f"{filename}_{i + j}" for j in range(len(batch_docs))]
+        
+        collection.add(
+            ids=ids,
+            embeddings=batch_embeddings,
+            documents=[doc.page_content for doc in batch_docs],
+            metadatas=[doc.metadata for doc in batch_docs]
+        )
+    return len(final_docs)
+
+# 지식 베이스 파일 목록을 반환하는 함수, 2025-09-12 jylee
+def list_uploaded_kbs() -> List[str]:
+    """업로드된 지식 베이스 파일 목록을 반환합니다."""
+    upload_folder = current_app.config["KB_UPLOAD_FOLDER"]
+    os.makedirs(upload_folder, exist_ok=True)
+    return sorted([f for f in os.listdir(upload_folder)])
+
+# 지식 베이스 컬렉션에서 retriever를 생성하는 함수, 2025-09-12 jylee
+def delete_kb_collection_and_file(filename: str) -> bool:
+    """지식 베이스 파일과 컬렉션의 관련 데이터를 삭제합니다."""
+    try:
+        # 1. 물리적 파일 삭제
+        upload_folder = current_app.config["KB_UPLOAD_FOLDER"]
+        filepath = os.path.join(upload_folder, filename)
+        if os.path.exists(filepath):
+            os.remove(filepath)
+
+        # 2. ChromaDB 컬렉션에서 해당 파일로부터 온 데이터만 삭제
+        collection_name = "sentiment_kb"
+        client = vectorstore.get_persistent_client()
+        collection = client.get_collection(name=collection_name)
+        
+        # metadatas를 기준으로 삭제할 ID 조회
+        results = collection.get(where={"filename": filename})
+        ids_to_delete = results['ids']
+        
+        if ids_to_delete:
+            collection.delete(ids=ids_to_delete)
+
+        return True
+    except Exception as e:
+        print(f"Error during KB deletion for {filename}: {e}")
         return False

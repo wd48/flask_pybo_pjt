@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container my-3">
+    <h2 class="border-bottom py-2">감정 분석 지식 베이스 관리</h2>
+
+    <!-- 파일 업로드 폼 -->
+    <div class="card my-4">
+        <div class="card-header">
+            새 지식 베이스 파일 업로드 (PDF 또는 TXT)
+        </div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data" action="{{ url_for('rag.manage_kb') }}">
+                <div class="input-group">
+                    <input type="file" class="form-control" id="kb_file" name="kb_file" accept=".pdf,.txt">
+                    <button type="submit" class="btn btn-primary">업로드 및 인덱싱</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 업로드된 파일 목록 -->
+    <div class="card my-4">
+        <div class="card-header">
+            업로드된 지식 베이스 목록
+        </div>
+        <ul class="list-group list-group-flush">
+            {% if files %}
+                {% for file in files %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>{{ file }}</span>
+                    <form action="{{ url_for('rag.delete_kb_file', filename=file) }}" method="post" onsubmit="return confirm('정말로 이 파일을 삭제하시겠습니까? 관련 인덱스 데이터도 함께 삭제됩니다.');">
+                        <button type-="submit" class="btn btn-danger btn-sm">삭제</button>
+                    </form>
+                </li>
+                {% endfor %}
+            {% else %}
+                <li class="list-group-item">업로드된 파일이 없습니다.</li>
+            {% endif %}
+        </ul>
+    </div>
+    
+    <a href="{{ url_for('main.index') }}" class="btn btn-secondary">메인으로 돌아가기</a>
+</div>
+{% endblock %}

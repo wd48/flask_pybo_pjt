@@ -17,11 +17,13 @@ def get_persistent_client():
     global persistent_client_instance
     if persistent_client_instance is None:
         try:
-            print(f"[-RAG-] Initializing ChromaDB PersistentClient at {current_app.config['CHAT_DB_PERSIST_DIR']}")
-            persistent_client_instance = chromadb.PersistentClient(current_app.config["CHAT_DB_PERSIST_DIR"])
+            # ❗️ HttpClient가 host와 port를 config에서 읽어오는지 확인
+            persistent_client_instance = chromadb.HttpClient(
+                host=current_app.config["CHROMA_HOST"],
+                port=current_app.config["CHROMA_PORT"]
+            )
         except Exception as e:
-            print(f"[-RAG-] Error initializing ChromaDB PersistentClient: {e}")
-            # 오류 발생 시 None을 반환하거나 적절한 오류 처리를 할 수 있습니다.
+            print(f"[-RAG-] Error connecting to ChromaDB server: {e}")
             return None
     return persistent_client_instance
 
@@ -98,22 +100,19 @@ def _create_vectordb_instance(docs=None, collection_name=None):
     embedding_function = models.get_embedding_model()
 
     if docs is not None:
-        # 문서로부터 새로운 vectordb 생성
-        # langchain-chroma의 Chroma 객체에 관리하는 client를 명시적으로 전달, 2025-08-25 jylee
+        # ❗️ HttpClient를 사용하므로 persist_directory 인자는 불필요
         return Chroma.from_documents(
             documents=docs,
             embedding=embedding_function,
-            persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
             collection_name=collection_name,
-            client=client   # 중앙화된 클라이언트를 사용, 2025-08-25 jylee
+            client=client
         )
     else:
-        # 기존 컬렉션 로드
+        # ❗️ HttpClient를 사용하므로 persist_directory 인자는 불필요
         return Chroma(
             embedding_function=embedding_function,
-            persist_directory=current_app.config["CHAT_DB_PERSIST_DIR"],
             collection_name=collection_name,
-            client=client  # 중앙화된 클라이언트를 사용, 2025-08-25 jylee
+            client=client
         )
 
 # 파일별 벡터 데이터베이스를 생성하는 함수, 2025-08-19 jylee
@@ -159,6 +158,35 @@ def get_file_vectordb(filename: str):
 # 모든 파일 컬렉션 목록을 반환하는 함수
 def get_all_file_collections():
     return file_collections
+
+# 지식 베이스 컬렉션에서 retriever를 생성하는 함수, 2025-09-12 jylee
+def get_kb_retriever(k: int = 3):
+    """지식 베이스('sentiment_kb') 컬렉션에서 retriever를 생성합니다."""
+    try:
+        client = get_persistent_client()
+        collection_name = "sentiment_kb"
+        
+        # 진단을 위해 컬렉션의 문서 수를 로그로 출력, 2025-09-12 jylee
+        try:
+            collection = client.get_collection(name=collection_name)
+            print(f"--- [KB Retriever] Found '{collection_name}' collection with {collection.count()} documents. ---")
+        except Exception as e:
+            print(f"--- [KB Retriever] Could not get collection '{collection_name}'. It might not exist yet. Error: {e} ---")
+            # 컬렉션이 없어도 오류를 발생시키지 않고 계속 진행 (어차피 retriever가 비어있을 것)
+
+        embedding_function = models.get_embedding_model()
+
+        # ChromaDB 컬렉션에서 retriever 생성
+        vectordb = Chroma(
+            client=client,
+            collection_name=collection_name,
+            embedding_function=embedding_function
+        )
+        
+        return vectordb.as_retriever(search_kwargs={"k": k})
+    except Exception as e:
+        print(f"Error creating KB retriever: {e}")
+        return None
 
 # 파일 컬렉션을 삭제하는 함수
 def delete_file_collection(filename: str):

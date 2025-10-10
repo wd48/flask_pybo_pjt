@@ -47,14 +47,17 @@
                     <a class="nav-link" href="{{ url_for('rag.settings') }}">DB 컬렉션 설정</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('rag.evaluation_results') }}">평가 결과</a>
+                    <a class="nav-link" href="{{ url_for('rag.manage_kb') }}">감정분석 지식 베이스 관리</a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('rag.evaluation_results') }}">평가 결과</a>
+                </li>
+                {#<li class="nav-item">
                     <a class="nav-link" href="{{ url_for('auth.signup') }}">계정생성</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('auth.login') }}">로그인</a>
-                </li>
+                </li>#}
             </ul>
             {% endif %}
         </div>

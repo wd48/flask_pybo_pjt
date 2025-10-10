@@ -16,7 +16,8 @@ MAIL_PASSWORD = 'cqhrxejbajsqodqb'      # 앱 비밀번호로 변경 필요
 MAIL_DEFAULT_SENDER = 'kastrio.work@gmail.com'
 
 # 챗봇 관련 설정, 2025-08-12 jylee
-CHAT_UPLOAD_FOLDER = 'uploads'  # 챗봇 업로드 폴더
+CHAT_UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
+KB_UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads/sentiment_kb')  # 챗봇 업로드 폴더 (감정분석 지식 베이스 참고용), 2025-09-12 jylee
 CHAT_DB_PERSIST_DIR = 'chroma_db'   # ChromaDB 저장 폴더
 
 # Embedding 모델 설정
@@ -25,6 +26,12 @@ EMBEDDING_MODEL = 'jhgan/ko-sroberta-multitask'
 # LLM 설정
 LLM_MODEL = 'gemma3n:latest'  # Ollama 모델 이름
 LLM_TEMPERATURE = 0.7  # LLM 온도 설정
+
+LLM_HOST = os.getenv("OLLAMA_HOST", 'http://localhost:11434')  # Ollama 서버 호스트
+print(f" * Loading OLLAMA_HOST: {LLM_HOST}")
+CHROMA_HOST = os.getenv('CHROMA_HOST', 'localhost')
+CHROMA_PORT = os.getenv('CHROMA_PORT', '8000')
+print(f" * Loading CHROMA: {CHROMA_HOST}:{CHROMA_PORT}")
 
 # 챗봇 업로드 폴더 설정
 if not os.path.exists(CHAT_UPLOAD_FOLDER):
