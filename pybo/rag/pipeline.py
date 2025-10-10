@@ -81,7 +81,7 @@ def get_sentiment_chain(config: dict):
     )
 
     # 2. 지식 베이스를 검색하기 위한 Retriever 가져오기
-    retriever = vectorstore.get_kb_retriever(k=2) # 관련성 높은 2개 문서 검색
+    retriever = vectorstore.get_kb_retriever(k=3) # 관련성 높은 3개 문서 검색
 
     # 3. 새로운 RAG 프롬프트 템플릿
     sentiment_prompt = PromptTemplate(

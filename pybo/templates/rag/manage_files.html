@@ -43,6 +43,7 @@
                 <th>파일명</th>
                 <th>컬렉션명</th>
                 <th>청크 수</th>
+                <th>관리</th>
               </tr>
             </thead>
             <tbody>
@@ -66,6 +67,11 @@
                       <span class="badge bg-secondary">0개</span>
                     {% endif %}
                   </td>
+                  <td>
+                    <form action="{{ url_for('rag.delete_file', filename=file) }}" method="post" onsubmit="return confirm('\'{{ file }}\' 파일과 관련 데이터를 삭제하시겠습니까?');">
+                      <button type="submit" class="btn btn-danger btn-sm">삭제</button>
+                    </form>
+                  </td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -75,6 +81,48 @@
         <div class="text-center text-muted py-4">
           <i class="fas fa-folder-open fa-3x mb-3"></i>
           <p>업로드된 문서가 없습니다.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- 연결되지 않은 컬렉션 목록 -->
+  <div class="card mt-4">
+    <div class="card-header">
+        <h4>🔗 연결되지 않은 컬렉션</h4>
+        <small class="text-muted">업로드된 파일과 연결되지 않은 벡터 컬렉션입니다. 불필요한 경우 삭제할 수 있습니다.</small>
+    </div>
+    <div class="card-body">
+      {% if unlinked_collections %}
+        <div class="table-responsive">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>컬렉션명</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for collection_name in unlinked_collections %}
+                <tr>
+                  <td>
+                    <i class="fas fa-database text-secondary"></i>
+                    <small class="text-muted">{{ collection_name }}</small>
+                  </td>
+                  <td>
+                    <form action="{{ url_for('rag.delete_collection', collection_name=collection_name) }}" method="post" onsubmit="return confirm('\'{{ collection_name }}\' 컬렉션을 삭제하시겠습니까?');">
+                      <button type="submit" class="btn btn-warning btn-sm">삭제</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+          <p>연결되지 않은 컬렉션이 없습니다.</p>
         </div>
       {% endif %}
     </div>

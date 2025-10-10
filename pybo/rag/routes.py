@@ -240,9 +240,6 @@ def summarize():
 # 파일 관리 페이지 및 업로드 기능
 @bp.route("/files", methods=['GET', 'POST'])
 def manage_files():
-    files = list_uploaded_pdfs()
-    collection_info = get_file_collection_info()
-    collection_names = get_collection_names()
     # PDF 파일 업로드 처리
     if request.method == 'POST':
         if 'pdf_file' not in request.files:
@@ -266,7 +263,33 @@ def manage_files():
         else:
             flash("PDF 파일만 업로드할 수 있습니다.")
         return redirect(url_for('rag.manage_files'))
-    return render_template('rag/manage_files.html', files=files, collection_info=collection_info, collection_names=collection_names)
+
+    # GET 요청 처리
+    files = list_uploaded_pdfs()
+    collection_info = get_file_collection_info()
+    
+    # 파일과 연결된 컬렉션 정보 가공
+    collections_list = []
+    for filename, info in collection_info.items():
+        collections_list.append({
+            "name": info['collection_name'],
+            "count": info['document_count'],
+            "filename": filename
+        })
+
+    # 전체 컬렉션 이름 가져오기
+    all_collection_names = get_collection_names()
+    
+    # 파일과 연결되지 않은 컬렉션 찾기
+    file_collection_names = {info['collection_name'] for info in collection_info.values()}
+    unlinked_collections = [name for name in all_collection_names if name not in file_collection_names]
+
+    return render_template('rag/manage_files.html', 
+                           files=files, 
+                           collection_info=collection_info, 
+                           collections=collections_list,
+                           all_collection_names=all_collection_names,
+                           unlinked_collections=unlinked_collections)
 
 # 지식 베이스 관리 페이지
 @bp.route("/kb", methods=['GET', 'POST'])
@@ -310,6 +333,21 @@ def delete_file(filename):
         flash(f"삭제 중 오류가 발생했습니다: {str(e)}")
     return redirect(url_for('rag.manage_files'))
 
+# 컬렉션 삭제 엔드포인트
+@bp.route('/files/delete_collection/<collection_name>', methods=['POST'])
+def delete_collection(collection_name):
+    print(f"--- delete_collection() called for collection: {collection_name} ---")
+    try:
+        persistent_client = get_persistent_client()
+        if persistent_client:
+            persistent_client.delete_collection(name=collection_name)
+            print(f"--- Collection '{collection_name}' deleted successfully ---")
+            flash(f"컬렉션 '{collection_name}'이(가) 삭제되었습니다.")
+    except Exception as e:
+        print(f"--- Error deleting collection '{collection_name}': {e} ---")
+        flash(f"컬렉션 삭제 중 오류가 발생했습니다: {str(e)}")
+    return redirect(url_for('rag.manage_files'))
+
 # 지식 베이스 파일 삭제 엔드포인트, 2025-09-12 jylee
 @bp.route("/kb/delete/<filename>", methods=['POST'])
 def delete_kb_file(filename):
@@ -321,37 +359,6 @@ def delete_kb_file(filename):
     except Exception as e:
         flash(f"지식 베이스 파일 삭제 중 오류 발생: {e}")
     return redirect(url_for('rag.manage_kb'))
-
-# 설정 페이지 및 컬렉션 관리
-@bp.route('/settings')
-def settings():
-    # 파일과 연결된 컬렉션 정보 가져오기
-    collection_info = get_file_collection_info()
-    collections_list = []
-    for filename, info in collection_info.items():
-        collections_list.append({
-            "name": info['collection_name'],
-            "count": info['document_count'],
-            "filename": filename
-        })
-    
-    # 전체 컬렉션 이름 가져오기
-    all_collection_names = get_collection_names()
-    return render_template('rag/settings.html', collections=collections_list, all_collection_names=all_collection_names)
-
-@bp.route('/settings/delete/<collection_name>', methods=['POST'])
-def delete_setting_collection(collection_name):
-    print(f"--- delete_setting_collection() called for collection: {collection_name} ---")
-    try:
-        persistent_client = get_persistent_client()
-        if persistent_client:
-            persistent_client.delete_collection(name=collection_name)
-            print(f"--- Collection '{collection_name}' deleted successfully ---")
-            flash(f"컬렉션 '{collection_name}'이(가) 삭제되었습니다.")
-    except Exception as e:
-        print(f"--- Error deleting collection '{collection_name}': {e} ---")
-        flash(f"컬렉션 삭제 중 오류가 발생했습니다: {str(e)}")
-    return redirect(url_for('rag.settings'))
 
 # 감성 분석 페이지 및 기능
 @bp.route("/sentiment_analysis", methods=['GET'])
