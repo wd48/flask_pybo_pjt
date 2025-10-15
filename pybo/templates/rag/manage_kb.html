@@ -1,44 +1,166 @@
-{% extends 'base.html' %}
+<!-- templates/rag/manage_kb.html -->
+{% extends "base.html" %}
 {% block content %}
-<div class="container my-3">
-    <h2 class="border-bottom py-2">감정 분석 지식 베이스 관리</h2>
+<div class="container mt-4">
+  <h2>🧠 지식 베이스 관리</h2>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="mt-3 alert alert-info">
+          {% for message in messages %}
+            <div>{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
 
-    <!-- 파일 업로드 폼 -->
-    <div class="card my-4">
-        <div class="card-header">
-            새 지식 베이스 파일 업로드 (PDF 또는 TXT)
-        </div>
-        <div class="card-body">
-            <form method="post" enctype="multipart/form-data" action="{{ url_for('rag.manage_kb') }}">
-                <div class="input-group">
-                    <input type="file" class="form-control" id="kb_file" name="kb_file" accept=".pdf,.txt">
-                    <button type="submit" class="btn btn-primary">업로드 및 인덱싱</button>
-                </div>
-            </form>
-        </div>
+  <div class="card mb-4">
+    <div class="card-header">
+        <h4>📄 지식 베이스 파일 업로드 (PDF, TXT)</h4>
     </div>
-
-    <!-- 업로드된 파일 목록 -->
-    <div class="card my-4">
-        <div class="card-header">
-            업로드된 지식 베이스 목록
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label for="kb_file" class="form-label">파일 선택</label>
+          <input type="file" class="form-control" name="kb_file" accept=".pdf,.txt" required>
         </div>
-        <ul class="list-group list-group-flush">
-            {% if files %}
-                {% for file in files %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <span>{{ file }}</span>
-                    <form action="{{ url_for('rag.delete_kb_file', filename=file) }}" method="post" onsubmit="return confirm('정말로 이 파일을 삭제하시겠습니까? 관련 인덱스 데이터도 함께 삭제됩니다.');">
-                        <button type-="submit" class="btn btn-danger btn-sm">삭제</button>
+        <button type="submit" class="btn btn-primary">업로드 및 인덱싱</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 업로드된 지식 베이스 목록 -->
+  <div class="card">
+    <div class="card-header">
+        <h4>📚 업로드된 지식 베이스 목록</h4>
+        <small class="text-muted">각 파일은 'kb_' 접두사가 붙은 개별 컬렉션으로 관리됩니다.</small>
+    </div>
+    <div class="card-body">
+      {% if files %}
+        <div class="table-responsive">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>파일명</th>
+                <th>컬렉션명</th>
+                <th>청크 수</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for file in files %}
+                <tr>
+                  <td>
+                    {% if file.endswith('.pdf') %}
+                      <i class="fas fa-file-pdf text-danger"></i>
+                    {% else %}
+                      <i class="fas fa-file-alt text-secondary"></i>
+                    {% endif %}
+                    {{ file }}
+                  </td>
+                  <td>
+                    {% if collection_info.get(file) %}
+                      <small class="text-muted">{{ collection_info[file]['collection_name'] }}</small>
+                    {% else %}
+                      <small class="text-warning">컬렉션 정보 없음</small>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if collection_info.get(file) %}
+                      <span class="badge bg-primary">{{ collection_info[file]['document_count'] }}개</span>
+                    {% else %}
+                      <span class="badge bg-secondary">0개</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <form action="{{ url_for('rag.delete_kb_file', filename=file) }}" method="post" onsubmit="return confirm('\'{{ file }}\' 파일과 관련 컬렉션을 모두 삭제하시겠습니까?');">
+                      <button type="submit" class="btn btn-danger btn-sm">삭제</button>
                     </form>
-                </li>
-                {% endfor %}
-            {% else %}
-                <li class="list-group-item">업로드된 파일이 없습니다.</li>
-            {% endif %}
-        </ul>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="fas fa-folder-open fa-3x mb-3"></i>
+          <p>업로드된 지식 베이스가 없습니다.</p>
+        </div>
+      {% endif %}
     </div>
-    
-    <a href="{{ url_for('main.index') }}" class="btn btn-secondary">메인으로 돌아가기</a>
+  </div>
+
+  <!-- 연결되지 않은 KB 컬렉션 목록 -->
+  <div class="card mt-4">
+    <div class="card-header">
+        <h4>🔗 연결되지 않은 KB 컬렉션</h4>
+        <small class="text-muted">업로드된 파일과 연결되지 않은 'kb_' 컬렉션입니다. 불필요한 경우 삭제할 수 있습니다.</small>
+    </div>
+    <div class="card-body">
+      {% if unlinked_collections %}
+        <div class="table-responsive">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>컬렉션명</th>
+                <th>관리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for collection_name in unlinked_collections %}
+                <tr>
+                  <td>
+                    <i class="fas fa-database text-secondary"></i>
+                    <small class="text-muted">{{ collection_name }}</small>
+                  </td>
+                  <td>
+                    <form action="{{ url_for('rag.delete_kb_collection', collection_name=collection_name) }}" method="post" onsubmit="return confirm('\'{{ collection_name }}\' 컬렉션을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.');">
+                      <button type="submit" class="btn btn-warning btn-sm">삭제</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+          <p>연결되지 않은 KB 컬렉션이 없습니다.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
 </div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-labelledby="loadingModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="loadingModalLabel">처리 중</h5>
+      </div>
+      <div class="modal-body text-center">
+        <div class="spinner-border" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-3">파일을 처리하고 있습니다. 잠시만 기다려 주세요...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const uploadForm = document.querySelector('form[enctype="multipart/form-data"]');
+  if (uploadForm) {
+    uploadForm.addEventListener('submit', function() {
+      var myModal = new bootstrap.Modal(document.getElementById('loadingModal'), {});
+      myModal.show();
+    });
+  }
+});
+</script>
+
 {% endblock %}

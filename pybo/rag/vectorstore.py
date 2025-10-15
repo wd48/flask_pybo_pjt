@@ -22,6 +22,7 @@ def get_persistent_client():
                 host=current_app.config["CHROMA_HOST"],
                 port=current_app.config["CHROMA_PORT"]
             )
+            print(f"[-RAG-] Successfully connected to ChromaDB server at {current_app.config['CHROMA_HOST']}:{current_app.config['CHROMA_PORT']}")
         except Exception as e:
             print(f"[-RAG-] Error connecting to ChromaDB server: {e}")
             return None
@@ -31,7 +32,7 @@ def get_persistent_client():
 file_collections = {}
 
 # 파일명을 기반으로 컬렉션 이름을 생성하는 함수
-def generate_collection_name(filename: str) -> str:
+def generate_collection_name(filename: str, prefix: str = "file") -> str:
     """파일 이름으로부터 ChromaDB 컬렉션 이름을 생성합니다."""
     # 파일 확장자를 제거하고, 타임스탬프와 랜덤 문자열 부분을 분리합니다.
     base_name = os.path.splitext(filename)[0]
@@ -60,7 +61,7 @@ def generate_collection_name(filename: str) -> str:
     # 8. 파일명 해시를 추가하여 중복 방지
     file_hash = hashlib.md5(filename.encode()).hexdigest()[:12]
 
-    final_collection_name = f"file_{cleaned_name}_{file_hash}"
+    final_collection_name = f"{prefix}_{cleaned_name}_{file_hash}"
 
     # ChromaDB의 이름 규칙에 맞게 최종 검증, 2025-08-25 jylee
     # 1. 허용된 문자만 포함 (이미 처리됨)
@@ -70,7 +71,9 @@ def generate_collection_name(filename: str) -> str:
     if not final_collection_name[0].isalnum():
         final_collection_name = 'c' + final_collection_name
 
-    return final_collection_name[:63]  # ChromaDB 이름 길이 제한(63) 준수
+    final_name = final_collection_name[:63]
+    print(f"[-RAG-] Generated collection name '{final_name}' for filename '{filename}'")
+    return final_name  # ChromaDB 이름 길이 제한(63) 준수
 
 # 벡터 데이터베이스를 가져오는 함수 (모든 문서를 검색 대상으로 함)
 def get_vectordb():
@@ -158,6 +161,35 @@ def get_file_vectordb(filename: str):
 # 모든 파일 컬렉션 목록을 반환하는 함수
 def get_all_file_collections():
     return file_collections
+
+# 모든 지식 베이스 컬렉션을 로드하고 반환하는 함수, 2025-10-10 jylee
+def get_all_kb_collections():
+    """서버에서 사용 가능한 모든 지식 베이스 컬렉션(kb_)을 로드하여 반환합니다."""
+    kb_collections = {}
+    client = get_persistent_client()
+    if not client:
+        print("[-RAG-] Could not get ChromaDB client to load KB collections.")
+        return kb_collections
+
+    try:
+        # 존재하는 컬렉션 리스트 정보
+        existing_collections = client.list_collections()
+        for collection in existing_collections:
+            if collection.name.startswith("kb_"):
+                try:
+                    vectordb_instance = _create_vectordb_instance(collection_name=collection.name)
+                    kb_collections[collection.name] = {
+                        'vectordb': vectordb_instance,
+                        'collection_name': collection.name
+                    }
+                    print(f"[-RAG-] Loaded existing KB collection: {collection.name}")
+                except Exception as e:
+                    print(f"[-RAG-] Error loading existing KB collection {collection.name}: {e}")
+    except Exception as e:
+        print(f"[-RAG-] Error listing collections from ChromaDB: {e}")
+    
+    print(f"[-RAG-] Found and loaded {len(kb_collections)} KB collections.")
+    return kb_collections
 
 # 지식 베이스 컬렉션에서 retriever를 생성하는 함수, 2025-09-12 jylee
 def get_kb_retriever(k: int = 3):

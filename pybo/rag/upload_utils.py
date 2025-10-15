@@ -37,6 +37,7 @@ def save_pdf(file_storage) -> LiteralString | str | bytes:
 # 2) index_pdf : PDF 파일을 로드하고, 텍스트를 분할한 후 파일별 벡터DB에 저장합니다.
 def index_pdf(filepath: str, chunk_size: int=500, chunk_overlap: int=50) -> int:
     filename = os.path.basename(filepath)
+    print(f"[-RAG-] Starting indexing for PDF file: {filename}")
     loader = PyPDFLoader(filepath)
     # PDF의 모든 텍스트를 한 번에 메모리로 호출한다.
     pages = loader.load()
@@ -221,10 +222,11 @@ def save_kb_and_index(file_storage) -> int:
     
     return index_kb(filepath)
 
-# 지식 베이스 파일을 로드, 분할 후 'sentiment_kb' 컬렉션에 저장하는 함수, 2025-09-12 jylee
+# 지식 베이스 파일을 로드, 분할 후 파일별 고유 컬렉션에 저장하는 함수, 2025-10-10 jylee
 def index_kb(filepath: str, chunk_size: int = 500, chunk_overlap: int = 50) -> int:
-    """지식 베이스 파일을 로드, 분할 후 'sentiment_kb' 컬렉션에 저장합니다."""
+    """지식 베이스 파일을 로드, 분할 후 파일별 고유 컬렉션에 저장합니다."""
     filename = os.path.basename(filepath)
+    print(f"[-RAG-] Starting indexing for KB file: {filename}")
     
     # 파일 확장자에 따라 다른 로더 사용
     if filename.endswith('.pdf'):
@@ -249,8 +251,8 @@ def index_kb(filepath: str, chunk_size: int = 500, chunk_overlap: int = 50) -> i
         doc.metadata["source"] = filepath
         doc.metadata["filename"] = filename
 
-    # 'sentiment_kb'라는 고정된 컬렉션 이름 사용
-    collection_name = "sentiment_kb"
+    # 'kb_' 접두사를 사용해 파일별 고유 컬렉션 이름 생성
+    collection_name = vectorstore.generate_collection_name(filename, prefix="kb")
     collection = vectorstore.get_persistent_client().get_or_create_collection(name=collection_name)
 
     embedding_model = get_embedding_model()
@@ -269,6 +271,7 @@ def index_kb(filepath: str, chunk_size: int = 500, chunk_overlap: int = 50) -> i
             documents=[doc.page_content for doc in batch_docs],
             metadatas=[doc.metadata for doc in batch_docs]
         )
+    print(f"[-RAG-] Indexed {len(final_docs)} chunks from {filepath} into collection '{collection_name}'")
     return len(final_docs)
 
 # 지식 베이스 파일 목록을 반환하는 함수, 2025-09-12 jylee
@@ -278,27 +281,54 @@ def list_uploaded_kbs() -> List[str]:
     os.makedirs(upload_folder, exist_ok=True)
     return sorted([f for f in os.listdir(upload_folder)])
 
-# 지식 베이스 컬렉션에서 retriever를 생성하는 함수, 2025-09-12 jylee
+# 지식 베이스 파일별 컬렉션 정보를 반환하는 함수
+def get_kb_collection_info() -> dict:
+    """지식 베이스 파일별 컬렉션 정보를 반환합니다."""
+    persistent_client = vectorstore.get_persistent_client()
+    if not persistent_client:
+        print("[-RAG-] Persistent client not initialized. Cannot get KB collection info.")
+        return {}
+
+    info = {}
+    for filename in list_uploaded_kbs():
+        collection_name = vectorstore.generate_collection_name(filename, prefix="kb")
+        try:
+            collection = persistent_client.get_collection(name=collection_name)
+            count = collection.count()
+            info[filename] = {
+                'collection_name': collection_name,
+                'document_count': count
+            }
+        except Exception:
+            info[filename] = {
+                'collection_name': collection_name,
+                'document_count': 0
+            }
+    return info
+
+# 지식 베이스 파일과 해당 컬렉션을 삭제하는 함수
 def delete_kb_collection_and_file(filename: str) -> bool:
-    """지식 베이스 파일과 컬렉션의 관련 데이터를 삭제합니다."""
+    """지식 베이스 파일과 해당 파일의 고유 컬렉션을 삭제합니다."""
     try:
         # 1. 물리적 파일 삭제
         upload_folder = current_app.config["KB_UPLOAD_FOLDER"]
         filepath = os.path.join(upload_folder, filename)
         if os.path.exists(filepath):
             os.remove(filepath)
+            print(f"[-RAG-] Deleted physical KB file: {filepath}")
 
-        # 2. ChromaDB 컬렉션에서 해당 파일로부터 온 데이터만 삭제
-        collection_name = "sentiment_kb"
+        # 2. 파일명으로부터 'kb_' 접두사를 가진 컬렉션 이름을 재생성하여 삭제
+        collection_name = vectorstore.generate_collection_name(filename, prefix="kb")
         client = vectorstore.get_persistent_client()
-        collection = client.get_collection(name=collection_name)
         
-        # metadatas를 기준으로 삭제할 ID 조회
-        results = collection.get(where={"filename": filename})
-        ids_to_delete = results['ids']
-        
-        if ids_to_delete:
-            collection.delete(ids=ids_to_delete)
+        try:
+            client.delete_collection(name=collection_name)
+            print(f"[-RAG-] Deleted KB collection '{collection_name}'")
+        except ValueError:
+            print(f"[-RAG-] KB collection '{collection_name}' not found, skipping deletion.")
+        except Exception as e:
+            # 다른 예외 발생 시 로그 남기기
+            print(f"[-RAG-] Error deleting KB collection '{collection_name}': {e}")
 
         return True
     except Exception as e:

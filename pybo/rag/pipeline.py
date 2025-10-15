@@ -27,7 +27,8 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.prompts import PromptTemplate
 from langchain_community.llms import Ollama
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import RunnablePassthrough
+from langchain.retrievers import EnsembleRetriever
+from langchain_core.runnables import RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
 
 from . import models, vectorstore
@@ -73,6 +74,7 @@ def get_sentiment_chain(config: dict):
     RAG 기반의 감정 분석 체인을 생성하고 반환합니다.
     전문가 지식 베이스에서 관련 정보를 검색하여, 이를 바탕으로 LLM이 답변을 생성합니다.
     """
+    print("[-RAG-] (Sentiment Chain) Initializing...")
     # 1. 일관된 답변을 위해 전용 LLM 인스턴스 생성 (낮은 temperature)
     sentiment_llm = Ollama(
         base_url=config["LLM_HOST"],
@@ -80,8 +82,29 @@ def get_sentiment_chain(config: dict):
         temperature=0.1
     )
 
-    # 2. 지식 베이스를 검색하기 위한 Retriever 가져오기
-    retriever = vectorstore.get_kb_retriever(k=3) # 관련성 높은 3개 문서 검색
+    # 2. 모든 지식 베이스 컬렉션에서 통합 검색을 위한 Retriever 가져오기, 2025-10-10 jylee
+    # 여러 KB 파일에 대한 동시 검색을 지원합니다.
+    # 참고: vectorstore.py에 get_all_kb_collections() 함수가 필요할 수 있습니다.
+    all_kb_collections = vectorstore.get_all_kb_collections()
+
+    retriever = None
+    if all_kb_collections:
+        # 리트리버 설정, k=3
+        retrievers = [
+            collection['vectordb'].as_retriever(search_kwargs={"k": 3})
+            for collection in all_kb_collections.values()
+        ]
+        
+        if len(retrievers) > 1:
+            # 2개 이상의 KB가 있으면 EnsembleRetriever로 결합
+            collection_names = [c['collection_name'] for c in all_kb_collections.values()]
+            print(f"[-RAG-] (Sentiment Chain) Creating EnsembleRetriever for {len(retrievers)} KB collections: {collection_names}")
+            retriever = EnsembleRetriever(retrievers=retrievers, weights=[0.5] * len(retrievers))
+        elif len(retrievers) == 1:
+            # 1개의 KB만 있으면 해당 retriever를 바로 사용
+            collection_name = list(all_kb_collections.values())[0]['collection_name']
+            print(f"[-RAG-] (Sentiment Chain) Using single retriever for KB collection: '{collection_name}'")
+            retriever = retrievers[0]
 
     # 3. 새로운 RAG 프롬프트 템플릿
     sentiment_prompt = PromptTemplate(
@@ -129,9 +152,9 @@ def get_sentiment_chain(config: dict):
 
     # 4. RAG 체인 구성 (LCEL 방식) 및 로깅 추가
     def log_and_format_docs(docs):
-        print("\n--- [RAG Sentiment Analysis] Retrieved Context: ---")
+        print("\n--- [-RAG-] (Sentiment Chain) Retrieved Context: ---")
         if not docs:
-            print("No relevant context found in Knowledge Base.")
+            print("[-RAG-] (Sentiment Chain) No relevant context found in Knowledge Base.")
             return "참고할 전문가 조언을 찾지 못했습니다."
         
         for doc in docs:
@@ -143,9 +166,18 @@ def get_sentiment_chain(config: dict):
 ")
         return "\n\n".join(doc.page_content for doc in docs)
 
+    # retriever 존재 여부에 따라 동적으로 context 생성 체인 구성, 2025-10-15 jylee
+    if retriever:
+        context_chain = itemgetter("query") | retriever | log_and_format_docs
+    else:
+        # retriever가 없으면 (KB가 없으면) 기본 메시지 반환
+        print("[-RAG-] (Sentiment Chain) No KB collections found. Retriever will be skipped.")
+        print("\n--- [RAG Sentiment Analysis] No retriever available. Skipping context search. ---")
+        context_chain = RunnableLambda(lambda x: "참고할 전문가 조언을 찾지 못했습니다.")
+
     rag_chain = (
         {
-            "context": itemgetter("query") | retriever | log_and_format_docs,
+            "context": context_chain,
             "gender": itemgetter("gender"),
             "age": itemgetter("age"),
             "emotion": itemgetter("emotion"),

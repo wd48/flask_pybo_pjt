@@ -16,7 +16,7 @@ from .pipeline import summarize_text, get_conversational_rag_chain, analyze_sent
 from .upload_utils import (
     save_pdf_and_index, list_uploaded_pdfs, get_pdf_retriever,
     get_collection_names, get_file_collection_info, delete_collection_and_file,
-    save_kb_and_index, list_uploaded_kbs, delete_kb_collection_and_file
+    save_kb_and_index, list_uploaded_kbs, delete_kb_collection_and_file, get_kb_collection_info
 )
 from .vectorstore import get_persistent_client, get_all_file_collections
 
@@ -89,15 +89,17 @@ def ask():
     answer = ""
     # 3. Retriever를 가져와 새로운 대화형 RAG 체인 생성
     if selected_file:
-        print(f"--- Getting retriever for selected file: {selected_file} ---")
+        print(f"[-RAG-] (ask) Using retriever for single file: {selected_file}")
         retriever = get_pdf_retriever(selected_file)
     else:
-        print("--- No file selected, getting retriever for all documents ---")
+        print("[-RAG-] (ask) No file selected. Using global retriever for all documents.")
         # 전체 문서 검색 로직 (현재는 첫번째 컬렉션 사용)
         all_collections = get_all_file_collections()
         if not all_collections:
+            print("[-RAG-] (ask) Error: No document collections available.")
             return jsonify({"error": "사용 가능한 문서 컬렉션이 없습니다."} ), 500
         first_collection_key = next(iter(all_collections))
+        print(f"[-RAG-] (ask) Using retriever from the first available collection: '{first_collection_key}'")
         retriever = all_collections[first_collection_key]['vectordb'].as_retriever()
     # 4. RAG 체인 생성 및 질문 처리
     if not retriever:
@@ -242,6 +244,7 @@ def summarize():
 def manage_files():
     # PDF 파일 업로드 처리
     if request.method == 'POST':
+        print("[-RAG-] (manage_files) Received POST request to upload a PDF file.")
         if 'pdf_file' not in request.files:
             flash("선택된 파일이 없습니다.")
             return redirect(request.url)
@@ -295,6 +298,7 @@ def manage_files():
 @bp.route("/kb", methods=['GET', 'POST'])
 def manage_kb():
     if request.method == 'POST':
+        print("[-RAG-] (manage_kb) Received POST request to upload a KB file.")
         if 'kb_file' not in request.files:
             flash("선택된 파일이 없습니다.")
             return redirect(request.url)
@@ -313,9 +317,22 @@ def manage_kb():
             flash("PDF 또는 TXT 파일만 업로드할 수 있습니다.")
         return redirect(url_for('rag.manage_kb'))
 
-    # GET 요청
+    # GET 요청 처리
     kb_files = list_uploaded_kbs()
-    return render_template('rag/manage_kb.html', files=kb_files)
+    kb_collection_info = get_kb_collection_info()
+
+    # 연결되지 않은 KB 컬렉션 찾기
+    all_collections = get_collection_names()
+    linked_kb_collections = {info['collection_name'] for info in kb_collection_info.values()}
+    unlinked_kb_collections = [
+        name for name in all_collections 
+        if name.startswith('kb_') and name not in linked_kb_collections
+    ]
+
+    return render_template('rag/manage_kb.html', 
+                           files=kb_files, 
+                           collection_info=kb_collection_info,
+                           unlinked_collections=unlinked_kb_collections)
 
 # 파일 삭제 엔드포인트
 @bp.route("/files/delete/<filename>", methods=['POST'])
@@ -345,8 +362,23 @@ def delete_collection(collection_name):
             flash(f"컬렉션 '{collection_name}'이(가) 삭제되었습니다.")
     except Exception as e:
         print(f"--- Error deleting collection '{collection_name}': {e} ---")
-        flash(f"컬렉션 삭제 중 오류가 발생했습니다: {str(e)}")
+        flash(f"삭제 중 오류가 발생했습니다: {str(e)}")
     return redirect(url_for('rag.manage_files'))
+
+# KB 컬렉션 삭제 엔드포인트
+@bp.route('/kb/delete_collection/<collection_name>', methods=['POST'])
+def delete_kb_collection(collection_name):
+    print(f"--- delete_kb_collection() called for collection: {collection_name} ---")
+    try:
+        persistent_client = get_persistent_client()
+        if persistent_client:
+            persistent_client.delete_collection(name=collection_name)
+            print(f"--- Collection '{collection_name}' deleted successfully ---")
+            flash(f"컬렉션 '{collection_name}'이(가) 삭제되었습니다.")
+    except Exception as e:
+        print(f"--- Error deleting collection '{collection_name}': {e} ---")
+        flash(f"컬렉션 삭제 중 오류가 발생했습니다: {str(e)}")
+    return redirect(url_for('rag.manage_kb'))
 
 # 지식 베이스 파일 삭제 엔드포인트, 2025-09-12 jylee
 @bp.route("/kb/delete/<filename>", methods=['POST'])
@@ -373,6 +405,7 @@ def sentiment_analysis():
         action = ', '.join(request.args.getlist('action')) if request.args.getlist('action') else '없음'
         reflect = ', '.join(request.args.getlist('reflect')) if request.args.getlist('reflect') else '없음'
         anchor = request.args.get('anchor')
+        print(f"[-RAG-] (sentiment_analysis) Received streaming request with data: gender={gender}, age={age}, emotion={emotion}")
 
         # 스트리밍 함수에 전달할 설정값 (컨텍스트가 활성 상태일 때 미리 복사), Application Context 에러 방지
         config = current_app.config.copy()
