@@ -28,7 +28,7 @@ from langchain.prompts import PromptTemplate
 from langchain_community.llms import Ollama
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.retrievers import EnsembleRetriever
-from langchain_core.runnables import RunnableLambda
+from langchain_core.runnables import RunnableLambda, RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
 from . import models, vectorstore
@@ -110,43 +110,54 @@ def get_sentiment_chain(config: dict):
     sentiment_prompt = PromptTemplate(
         input_variables=["context", "gender", "age", "emotion", "meaning", "action", "reflect", "anchor"],
         template="""
-            당신은 인지행동치료(CBT)와 긍정심리학에 기반하여 사용자의 감정 기록을 분석하는 전문 심리 상담가입니다.
-            당신의 임무는 사용자의 상황을 공감적으로 이해하고, 구체적이고 실용적인 조언을 제공하는 것입니다.
+            당신은 인지행동치료(CBT)와 긍정심리학에 기반한 전문 심리 상담가입니다.
+            사용자의 감정 기록을 분석하고, 공감적이고 실용적인 조언을 제공해야 합니다.
+            반드시 아래의 형식과 지침에 따라 답변을 생성해 주세요.
 
-            주어진 [전문가 조언]이 있다면 반드시 참고하고, 없다면 당신의 전문 지식을 바탕으로 답변을 생성해 주세요.
-            답변은 아래의 형식을 반드시 준수해야 합니다.
+            ---
+            ### 지침
 
-            --- 전문가 조언 ---
+            1.  **[전문가 조언] 활용**: 주어진 [전문가 조언]이 있다면, 반드시 그 내용을 **행동 분석**과 **심층 제언**에 적극적으로 참고하고 인용하여 답변을 작성하세요.
+            2.  **조언이 없는 경우**: [전문가 조언]에 "참고할 전문가 조언을 찾지 못했습니다."라고 표시되면, 당신의 일반적인 심리학 전문 지식을 바탕으로 답변을 생성하세요.
+            3.  **형식 준수**: 아래의 "분석 답변 형식"에 있는 모든 항목(감정 진단, 행동 분석, 심층 제언, 마음 다지기)을 반드시 포함하고, 마크다운(`**`)을 사용하여 소제목을 강조해 주세요.
+
+            ---
+            ### 전문가 조언
+
             {context}
-            --- END OF ADVICE ---
 
-            --- 감정 기록 ---
-            - 성별: {gender}
-            - 연령대: {age}
-            - 걷기 전 감정: {emotion}
-            - 감정을 느낀 이유: {meaning}
-            - 도움이 된 행동: {action}
-            - 행동 후 긍정적인 변화: {reflect}
-            - 오늘의 한마디: {anchor}
             ---
+            ### 감정 기록
 
-            --- 분석 답변 형식 ---
-            1.  **감정 진단**: 사용자가 기록한 감정과 그 이유를 바탕으로, 현재 감정 상태를 1~2문장으로 명확하게 진단합니다.
-                - 예: "오늘 느끼신 [감정]은 [이유]에서 비롯된 자연스러운 반응으로 보입니다."
+            - **성별**: {gender}
+            - **연령대**: {age}
+            - **감정**: {emotion}
+            - **이유**: {meaning}
+            - **도움이 된 행동**: {action}
+            - **긍정적 변화**: {reflect}
+            - **오늘의 다짐**: {anchor}
 
-            2.  **행동 분석**: 사용자가 시도한 '도움이 된 행동'이 심리학적으로 어떤 의미를 가지며, 왜 '긍정적인 변화'를 가져왔는지 분석합니다.
-                - [전문가 조언]에 관련 내용이 있다면, 그 이론을 근거로 들어 설명합니다.
-                - 예: "['도움이 된 행동']은(는) [전문가 조언 또는 심리학 이론]에 따르면 '행동 활성화' 기법에 해당하며, 이는 무기력감을 줄이고 긍정적인 감정을 유도하는 데 매우 효과적입니다."
-
-            3.  **심층 제언**: 사용자의 상황에 맞춰, 시도해볼 수 있는 구체적인 추가 활동이나 생각의 전환 방법을 2가지 이상 제안합니다. 각 제언은 "왜" 그것이 도움이 되는지에 대한 간단한 설명을 포함해야 합니다.
-                - **제언 1**: [구체적인 활동 제안]
-                  - **기대 효과**: [제안된 활동이 심리적으로 어떤 도움을 주는지에 대한 설명]
-                - **제언 2**: [다른 활동 또는 생각 전환 방법 제안]
-                  - **기대 효과**: [이것이 왜 도움이 되는지에 대한 설명]
-
-            4.  **마음 다지기**: 사용자의 '오늘의 한마디'를 인용하며, 긍정적인 지지와 격려의 메시지로 마무리합니다.
-                - 예: "'[오늘의 한마디]'라고 다짐하신 것처럼, 오늘의 경험이 앞으로 나아가는 데 훌륭한 밑거름이 될 것입니다."
             ---
+            ### 분석 답변 형식
+
+            **1. 감정 진단**
+            사용자의 감정과 그 이유를 바탕으로, 현재 감정 상태를 1~2문장으로 명확하게 진단합니다.
+            *예: "오늘 느끼신 {emotion}은(는) {meaning}에서 비롯된 자연스러운 반응으로 보입니다."*
+
+            **2. 행동 분석**
+            사용자가 시도한 '도움이 된 행동'이 심리학적으로 어떤 의미가 있고, 왜 '긍정적 변화'를 가져왔는지 분석합니다. [전문가 조언]이 있다면, 그 이론을 근거로 들어 설명합니다.
+            *예: "{action}은(는) [전문가 조언 또는 심리학 이론]에 따르면 '행동 활성화' 기법에 해당하며, 이는 무기력감을 줄이고 긍정적인 감정을 유도하는 데 매우 효과적입니다."*
+
+            **3. 심층 제언**
+            사용자의 상황에 맞춰 시도해볼 수 있는 구체적인 추가 활동이나 생각의 전환 방법을 **반드시 2가지** 제안합니다. 각 제언은 "기대 효과"를 포함해야 합니다.
+            - **제언 1**: [구체적인 활동 제안]
+              - **기대 효과**: [제안된 활동이 심리적으로 어떤 도움을 주는지에 대한 설명]
+            - **제언 2**: [다른 활동 또는 생각 전환 방법 제안]
+              - **기대 효과**: [이것이 왜 도움이 되는지에 대한 설명]
+
+            **4. 마음 다지기**
+            사용자의 '오늘의 다짐'을 인용하며, 긍정적인 지지와 격려의 메시지로 마무리합니다.
+            *예: "{anchor}라고 다짐하신 것처럼, 오늘의 소중한 경험이 앞으로 나아가는 데 훌륭한 밑거름이 될 것입니다."*
         """
     )
 
@@ -175,20 +186,14 @@ def get_sentiment_chain(config: dict):
         print("\n--- [RAG Sentiment Analysis] No retriever available. Skipping context search. ---")
         context_chain = RunnableLambda(lambda x: "참고할 전문가 조언을 찾지 못했습니다.")
 
-    rag_chain = (
-        {
-            "context": context_chain,
-            "gender": itemgetter("gender"),
-            "age": itemgetter("age"),
-            "emotion": itemgetter("emotion"),
-            "meaning": itemgetter("meaning"),
-            "action": itemgetter("action"),
-            "reflect": itemgetter("reflect"),
-            "anchor": itemgetter("anchor")
-        }
-        | sentiment_prompt
-        | sentiment_llm
-        | StrOutputParser()
+    # 최종 답변을 생성하는 LLM 체인
+    llm_chain = sentiment_prompt | sentiment_llm | StrOutputParser()
+
+    # context와 최종 answer를 모두 반환하도록 체인 재구성
+    rag_chain = RunnablePassthrough.assign(
+        context=context_chain
+    ).assign(
+        answer=llm_chain
     )
 
     print(f"[-RAG-] Initialized RAG-based sentiment chain with LLM: {config['LLM_MODEL']}")
@@ -332,21 +337,26 @@ def analyze_sentiment(gender: str, age: str, emotion: str, meaning: str, action:
 def analyze_sentiment_stream(config: dict, gender: str, age: str, emotion: str, meaning: str, action: str, reflect: str, anchor: str):
     """감정 분석을 스트리밍 방식으로 처리하고, 생성되는 텍스트 조각을 반환하며 응답 시간을 기록합니다."""
     start_time = time.time()
+    
+    # RAG 체인 및 관련 구성 요소를 가져옵니다.
     chain = get_sentiment_chain(config)
     
-    # 사용자 입력을 RAG 체인에 맞는 딕셔너리 형태로 구성, 2025-09-12 jylee
+    # 사용자 입력을 RAG 체인에 맞는 딕셔너리 형태로 구성
     input_data = {
         "gender": gender, "age": age, "emotion": emotion, "meaning": meaning,
-        "action": action, "reflect": reflect, "anchor": anchor
+        "action": action, "reflect": reflect, "anchor": anchor,
+        "query": f"{emotion} 감정의 이유: {meaning}, 오늘의 다짐: {anchor}"
     }
-    # 사용자 입력 중 검색어(query)로 사용할 텍스트를 조합하여 딕셔너리에 추가, 2025-09-12 jylee
-    query = f"{emotion} 감정의 이유: {meaning}, 오늘의 다짐: {anchor}"
-    input_data["query"] = query
-    print(f"--- [RAG Sentiment Analysis] Query: {query} ---")
+    print(f"--- [RAG Sentiment Analysis] Query: {input_data['query']} ---")
 
-    # 스트리밍 시작, 2025-09-12 jylee
-    for chunk in chain.stream(input_data):
-        yield chunk
+    # 1. 먼저 context를 생성하고 즉시 반환합니다.
+    context = chain.invoke(input_data)['context']
+    yield {"context": context}
+
+    # 2. context를 포함한 전체 입력을 사용하여 답변 생성을 스트리밍합니다.
+    answer_chain = chain.pick("answer")
+    for chunk in answer_chain.stream(input_data):
+        yield {"answer": chunk}
     
     end_time = time.time()
     log_chatbot_response_time(end_time - start_time, source="감정 분석")

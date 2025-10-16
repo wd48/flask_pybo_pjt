@@ -2,7 +2,7 @@
 {% block content %}
 <div class="container mt-5">
   <h3>감정 기록 분석</h3>
-    <form id="sentiment-form" method="POST">
+    <form id="sentiment-form">
         <div class="mb-3">
             <label class="form-label">성별은 어떻게 되십니까?</label>
             <div>
@@ -110,94 +110,115 @@
         <button type="submit" class="btn btn-primary mt-2">분석</button>
     </form>
 
-    <div id="result-container" class="mt-4 p-3 border rounded bg-light" style="display: none;">
-        <strong>감정 분석 결과:</strong>
-        <div id="result-content" style="padding: 1em; border-radius: 0.5em; white-space: pre-wrap;"></div>
+      <div class="mt-4" id="resultArea" style="display: none;">
+        <div class="card">
+          <div class="card-header">
+            <h4>🤖 AI 분석 결과</h4>
+          </div>
+          <div class="card-body">
+            <div id="sentimentResult" class="text-start" style="white-space: pre-wrap;"></div>
+          </div>
+        </div>
+        <div class="card mt-3">
+            <div class="card-header">
+              <h4>📚 전문가 조언 (참고 자료)</h4>
+            </div>
+            <div class="card-body">
+              <div id="expertAdvice" class="text-start" style="white-space: pre-wrap; font-size: 0.9em; color: #555;"></div>
+            </div>
+          </div>
+      </div>
     </div>
-</div>
-{% endblock %}
-{% block script %}
-<script src="https://cdn.jsdelivr.net/npm/simplemde@1.11.2/dist/simplemde.min.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/simplemde@1.11.2/dist/simplemde.min.css">
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const form = document.getElementById('sentiment-form');
-        const resultContainer = document.getElementById('result-container');
-        const resultContent = document.getElementById('result-content');
-        let eventSource;
 
-        form.addEventListener('submit', function(event) {
-            event.preventDefault();
+    <script>
+      document.getElementById('sentiment-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const resultArea = document.getElementById('resultArea');
+        const sentimentResult = document.getElementById('sentimentResult');
+        const expertAdvice = document.getElementById('expertAdvice');
+        
+        // 이전 결과 초기화
+        sentimentResult.innerHTML = '';
+        expertAdvice.innerHTML = '';
+        resultArea.style.display = 'block';
 
-            if (eventSource) {
-                eventSource.close();
+        // 'AI 분석 결과' 카드 내부에 로딩 UI 삽입
+        sentimentResult.innerHTML = `
+          <div style="display: flex; justify-content: center; align-items: center; flex-direction: column; min-height: 150px;">
+            <div class="spinner-border" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3">AI가 감정 기록을 분석하고 있습니다. 잠시만 기다려 주세요...</p>
+          </div>
+        `;
+
+        const formData = new FormData(this);
+        const params = new URLSearchParams();
+        for (const pair of formData) {
+          if (pair[0] === 'action' || pair[0] === 'reflect') {
+            params.append(pair[0], pair[1]);
+          } else {
+            params.set(pair[0], pair[1]);
+          }
+        }
+
+        const queryString = params.toString();
+        const eventSource = new EventSource(`/chat/sentiment_analysis?${queryString}`);
+        let fullResult = "";
+        let isFirstAnswerChunk = true;
+
+        eventSource.onmessage = function(event) {
+          if (event.data === "[DONE]") {
+            eventSource.close();
+            return;
+          }
+          
+          const data = JSON.parse(event.data);
+
+          if (data.answer) {
+            if (isFirstAnswerChunk) {
+              sentimentResult.innerHTML = ''; // 첫 답변 조각 도착 시 로딩 UI 제거
+              isFirstAnswerChunk = false;
+            }
+            sentimentResult.innerHTML += data.answer.replace(/\\n/g, '\n');
+            fullResult += data.answer;
+          }
+          if (data.context) {
+            expertAdvice.innerHTML = data.context.replace(/\\n/g, '\n');
+          }
+        };
+
+        eventSource.addEventListener('end', function(event) {
+            eventSource.close();
+            // 답변이 전혀 오지 않은 경우 (오류 등), 로딩 UI 대신 메시지 표시
+            if (isFirstAnswerChunk) {
+                sentimentResult.innerHTML = "<p class='text-muted'>AI로부터 답변을 받는 데 실패했습니다.</p>";
             }
 
-            const formData = new FormData(form);
-            const params = new URLSearchParams(formData);
-
-            resultContent.innerHTML = '분석 중입니다. 잠시만 기다려 주세요...';
-            resultContainer.style.display = 'block';
-
-            eventSource = new EventSource(`{{ url_for('rag.sentiment_analysis') }}?${params.toString()}`);
-
-            let fullContent = '';
-
-            // 1. 타이핑 효과 구현
-            eventSource.onmessage = function(event) {
-                // 첫 토큰 수신 시, "분석 중" 메시지 제거
-                if (resultContent.innerHTML.includes('분석 중')) {
-                    resultContent.innerHTML = '';
-                }
-                const token = JSON.parse(event.data);
-                fullContent += token;
-                // 받은 텍스트 조각을 그대로 이어 붙여 타이핑 효과를 냅니다.
-                resultContent.appendChild(document.createTextNode(token));
+            // 최종 결과를 서버에 로그로 전송
+            const logData = {
+                gender: formData.get('gender'),
+                age: formData.get('age'),
+                emotion: formData.get('emotion'),
+                meaning: formData.get('meaning'),
+                action: formData.getAll('action').join(', '),
+                reflect: formData.getAll('reflect').join(', '),
+                anchor: formData.get('anchor'),
+                result: fullResult
             };
 
-            // 2. 스트림 종료 시 최종 처리
-            eventSource.addEventListener('end', function(event) {
-                eventSource.close();
-                
-                // 3. 완성된 전체 텍스트를 Markdown으로 최종 렌더링
-                resultContent.innerHTML = SimpleMDE.prototype.markdown(fullContent);
-
-                // 4. 완성된 답변으로 로그 기록
-                const logData = {
-                    gender: formData.get('gender'),
-                    age: formData.get('age'),
-                    emotion: formData.get('emotion'),
-                    meaning: formData.get('meaning'),
-                    action: formData.getAll('action').join(', ') || '없음',
-                    reflect: formData.getAll('reflect').join(', ') || '없음',
-                    anchor: formData.get('anchor'),
-                    result: fullContent
-                };
-
-                fetch("{{ url_for('rag.log_sentiment_result') }}", {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(logData)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if(data.status === 'success') {
-                        console.log('Sentiment log saved successfully.');
-                    } else {
-                        console.error('Failed to save sentiment log:', data.message);
-                    }
-                })
-                .catch(error => console.error('Error saving sentiment log:', error));
+            fetch('/chat/log_sentiment_result', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(logData)
             });
-
-            eventSource.onerror = function(err) {
-                console.error("EventSource failed:", err);
-                resultContent.innerHTML += "\n\n[오류: 서버와 연결이 끊어졌습니다.]";
-                eventSource.close();
-            };
         });
-    });
-</script>
+
+        eventSource.onerror = function(err) {
+          console.error("EventSource failed:", err);
+          sentimentResult.innerHTML = "<p class='text-danger'>오류가 발생했습니다. 잠시 후 다시 시도해주세요.</p>";
+          eventSource.close();
+        };
+      });
+    </script>
 {% endblock %}
